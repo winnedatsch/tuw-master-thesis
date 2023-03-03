@@ -45,6 +45,13 @@ rel(T, REL) :- choose_rel(T, RT, CLASS, REL, REL', object), state(RT, ID), has_a
 rel(T, REL') :- choose_rel(T, RT, CLASS, REL, REL', object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL', ID').
 
 % compare
+#defined compare/5.
+
+state(T,ID) :- compare(T, RT0, RT1, VALUE, true), state(RT0, ID), state(RT1, ID'), has_attribute(ID, _, VALUE), not has_attribute(ID', _, VALUE).
+state(T,ID') :- compare(T, RT0, RT1, VALUE, true), state(RT0, ID), state(RT1, ID'), not has_attribute(ID, _, VALUE), has_attribute(ID', _, VALUE).
+
+state(T,ID') :- compare(T, RT0, RT1, VALUE, false), state(RT0, ID), state(RT1, ID'), has_attribute(ID, _, VALUE), not has_attribute(ID', _, VALUE).
+state(T,ID) :- compare(T, RT0, RT1, VALUE, false), state(RT0, ID), state(RT1, ID'), not has_attribute(ID, _, VALUE), has_attribute(ID', _, VALUE).
 
 % common
 #defined common/3.
@@ -118,13 +125,13 @@ bool(T,no) :- two_same(T, RT0, RT1, ATTR), not bool(T,yes).
 % all_different
 #defined all_different/3.
 
-bool(T,no) :- all_different(T, RT, ATTR), state(RT, ID), state(RT, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE'), VALUE == VALUE'.
+bool(T,no) :- all_different(T, RT, ATTR), state(RT, ID), state(RT, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE).
 bool(T,yes) :- all_different(T, RT, ATTR), not bool(T,no).
 
 % all_same
 #defined all_same/3.
 
-bool(T,no) :- all_same(T, RT, ATTR), state(RT, ID), state(RT, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE'), VALUE != VALUE'.
+bool(T,no) :- all_same(T, RT, ATTR), state(RT, ID), state(RT, ID'), has_attribute(ID, ATTR, VALUE), not has_attribute(ID', ATTR, VALUE).
 bool(T,yes) :- all_same(T, RT, ATTR), not bool(T,no).
 
 % unique

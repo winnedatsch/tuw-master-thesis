@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "tuw-master-thesis"
+version = "0.1.0"
+description = ""
+authors = ["Jan Hadl <jan.d.hadl@gmail.com>"]
+readme = "README.md"
+packages = []
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.11"
+clingo = "^5.6.2"
+tensorflow-macos = "^2.11.0"
+tensorflow-metal = "^0.7.1"
+transformers = "^4.26.1"
+pillow = "^9.4.0"
+requests = "^2.28.2"
+torch = "^1.13.1"
+torchvision = "^0.14.1"
+timm = "^0.6.12"
+
+[tool.poetry.group.dev.dependencies]
+notebook = "^6.5.2"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

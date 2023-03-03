@@ -1,5 +1,6 @@
 import json 
 import re
+from pattern.text.en import singularize
 
 with open('../../data/gqa/metadata/gqa_all_class.json') as f:
     categories = json.load(f)
@@ -13,12 +14,32 @@ for category, classes in categories.items():
 
 with open('../../data/gqa/metadata/gqa_all_attribute.json') as f:
     attributes = json.load(f)
-value_to_attribute = {v: attribute for attribute, values in attributes.items() for v in values}
+value_to_attribute = {}
+for attribute, values in attributes.items():
+    for v in values:
+        if v not in value_to_attribute:
+            value_to_attribute[v] = [attribute]
+        else:
+            value_to_attribute[v].append(attribute)
+
 
 
 def sanitize(name):
+    # source: DFOL-VQA
+    plurale_tantum = ['this', 'yes', 'pants', 'shorts', 'glasses', 'scissors', 'panties', 'trousers', 'binoculars', 'pliers', 'tongs',\
+        'tweezers', 'forceps', 'goggles', 'jeans', 'tights', 'leggings', 'chaps', 'boxers', 'indoors', 'outdoors', 'bus', 'octapus', 'waitress',\
+        'pasta', 'pita', 'glass', 'asparagus', 'hummus', 'dress', 'cafeteria', 'grass', 'class']
+
+    irregulars = {'shelves': 'shelf', 'bookshelves': 'bookshelf', 'olives': 'olive', 'brownies': 'brownie', 'cookies': 'cookie'}
+    
+    temp = name.strip().lower()
+    if temp in irregulars:
+        temp = irregulars[temp]
+    elif not (temp.split(' ')[-1] in plurale_tantum or temp[-2:] == 'ss'):
+        temp = singularize(temp)
     cleanup_regex = r'[^\w]'
-    return re.sub(cleanup_regex, '_', name.strip())
+
+    return re.sub(cleanup_regex, '_', temp)
 
 def encode_question(question):
     scene_encoding = ""
@@ -27,20 +48,28 @@ def encode_question(question):
 
         scene_encoding += f"has_attribute({oid}, class, {sanitize(object['name'])}).\n"
         scene_encoding += f"has_attribute({oid}, name, {sanitize(object['name'])}).\n"
-        if object['name'] in class_to_category:
-            for category in class_to_category[object['name']]:
-                scene_encoding += f"has_attribute({oid}, class, {sanitize(category)}).\n"
+       
+        for category in class_to_category.get(sanitize(object['name']), []):
+            scene_encoding += f"has_attribute({oid}, class, {category}).\n"    
 
-        for att in object['attributes']:
-            scene_encoding += f"has_attribute({oid}, {value_to_attribute.get(att, 'any')}, {sanitize(att)}).\n"
+        for value in object['attributes']:
+            if value in value_to_attribute:
+                for att in value_to_attribute[value]:
+                    scene_encoding += f"has_attribute({oid}, {sanitize(att)}, {sanitize(value)}).\n"
+            else:
+                scene_encoding += f"has_attribute({oid}, any, {sanitize(value)}).\n"
 
-        if (object['x'] + object['w']/2) > question['sceneGraph']['width']/2:
+        if (object['x'] + object['w']/2) > question['sceneGraph']['width']/3*2:
             scene_encoding += f"has_attribute({oid}, hposition, right).\n"
+        elif (object['x'] + object['w']/2) > question['sceneGraph']['width']/3:
+            scene_encoding += f"has_attribute({oid}, hposition, middle).\n"
         else:
             scene_encoding += f"has_attribute({oid}, hposition, left).\n"
 
-        if (object['y'] + object['h']/2) > question['sceneGraph']['height']/2:
+        if (object['y'] + object['h']/2) > question['sceneGraph']['height']/3*2:
             scene_encoding += f"has_attribute({oid}, vposition, bottom).\n"
+        if (object['y'] + object['h']/2) > question['sceneGraph']['height']/3:
+            scene_encoding += f"has_attribute({oid}, vposition, middle).\n"
         else:
             scene_encoding += f"has_attribute({oid}, vposition, top).\n"
 
@@ -90,7 +119,7 @@ def encode_question(question):
             question_encoding += f"common({i+step_padding}, {dependencies[0]}, {dependencies[1]}).\n"
 
         elif operation['operation'] == 'filter':
-            attr = '_'.join(operation['operation'].split(' ')[1:])
+            attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
             if operation['argument'].startswith('not('):
                 value = sanitize(operation['argument'][4:-1])
                 question_encoding += f"filter_any({i+step_padding}, {dependencies[0]}, {value}).\n"
@@ -127,9 +156,15 @@ def encode_question(question):
             question_encoding += f"all_different({i+step_padding}, {dependencies[0]}, {attr}).\n"
 
         elif operation['operation'].startswith('filter'):
-            attr = '_'.join(operation['operation'].split(' ')[1:])
-            value = sanitize(operation['argument'])
-            question_encoding += f"filter({i+step_padding}, {dependencies[0]}, {attr}, {value}).\n"
+            attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
+            if operation['argument'].startswith('not('):
+                value = sanitize(operation['argument'][4:-1])
+                question_encoding += f"filter({i+step_padding}, {dependencies[0]}, {attr}, {value}).\n"
+                question_encoding += f"negate({i+step_padding+1}, {i+step_padding}, {dependencies[0]}).\n"
+                step_padding = step_padding + 1
+            else:
+                value = sanitize(operation['argument'])
+                question_encoding += f"filter({i+step_padding}, {dependencies[0]}, {attr}, {value}).\n"
 
         elif operation['operation'] == 'verify':
             value = sanitize(operation['argument'])
@@ -142,25 +177,38 @@ def encode_question(question):
             question_encoding += f"verify_rel({i+step_padding}, {dependencies[0]}, {target_class}, {relation_type}, {position}).\n"
         
         elif operation['operation'].startswith('verify'):
-            attr = '_'.join(operation['operation'].split(' ')[1:])
+            attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
             value = sanitize(operation['argument'])
             question_encoding += f"verify_attr({i+step_padding}, {dependencies[0]}, {attr}, {value}).\n"
 
         elif operation['operation'].startswith('choose'):
             if operation['argument'] == '':
-                question_encoding += f"% compare - unsupported\n" 
+                op_tokens = operation['operation'].split(' ')
+                if len(op_tokens) >= 3:
+                    if sanitize(op_tokens[1]) == 'more':
+                        question_encoding += f"compare({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {sanitize(op_tokens[2])}, true).\n"
+                    elif sanitize(op_tokens[1]) == 'less':
+                        question_encoding += f"compare({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {sanitize(op_tokens[2])}, false).\n"
+                else:
+                    token = sanitize(op_tokens[1])
+                    if token.endswith('er'):
+                        token = token[:-2]
+                        if token.endswith('i'):
+                            token = token[:-1] + 'y'
+
+                    question_encoding += f"compare({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {token}, true).\n"
             else:
-                attr = '_'.join(operation['operation'].split(' ')[1:])
+                attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
                 option0 = sanitize(operation['argument'].split('|')[0])
                 option1 = sanitize(operation['argument'].split('|')[1])
                 question_encoding += f"choose_attr({i+step_padding}, {dependencies[0]}, {attr}, {option0}, {option1}).\n"
 
         elif operation['operation'].startswith('same'):
-            attr = '_'.join(operation['operation'].split(' ')[1:]) 
+            attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
             question_encoding += f"two_same({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {attr}).\n"
 
         elif operation['operation'].startswith('different'):
-            attr = '_'.join(operation['operation'].split(' ')[1:]) 
+            attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
             question_encoding += f"two_different({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {attr}).\n" 
         
         ops_map[i] = i + step_padding
@@ -170,7 +218,7 @@ def encode_question(question):
 
 
 if __name__ == '__main__':
-    question_and_scene_graph_file = '../../data/gqa/questions/train_sampled_questions.json'
+    question_and_scene_graph_file = '../../data/gqa/questions/train_sampled_questions_10000.json'
     target_folder = '../../data/gqa/encoded_questions'
 
     with open(question_and_scene_graph_file) as f:
