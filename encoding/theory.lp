@@ -8,6 +8,7 @@
 % has_relation(ID, in, ID')
 % has_relation(ID, in_front_of, ID'')
 
+#defined has_attribute/3.
 #defined has_relation/3.
 
 % ------- Rules for operations -------

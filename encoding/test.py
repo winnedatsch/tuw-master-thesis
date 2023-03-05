@@ -1,9 +1,9 @@
 from clingo.control import Control 
 import json 
-from encode import encode_question, sanitize
+from encode import encode_sample, sanitize
 from itertools import islice
 
-with open('../../data/gqa/questions/train_sampled_questions_10000.json') as f:
+with open('../data/questions/train_sampled_questions_10000.json') as f:
     questions = json.load(f)
 
 with open('./theory.lp') as tf:
@@ -33,7 +33,7 @@ for qid, question in islice(questions.items(), 0, num_questions):
     ctl = Control()
     ctl.add(theory)
 
-    scene_encoding, question_encoding = encode_question(question)
+    scene_encoding, question_encoding = encode_sample(question)
     ctl.add(scene_encoding)
     ctl.add(question_encoding)
 

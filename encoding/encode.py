@@ -2,7 +2,7 @@ import json
 import re
 from pattern.text.en import singularize
 
-with open('../../data/gqa/metadata/gqa_all_class.json') as f:
+with open('../data/metadata/gqa_all_class.json') as f:
     categories = json.load(f)
 class_to_category = {}
 for category, classes in categories.items():
@@ -12,7 +12,7 @@ for category, classes in categories.items():
         else:
             class_to_category[c].append(category)
 
-with open('../../data/gqa/metadata/gqa_all_attribute.json') as f:
+with open('../data/metadata/gqa_all_attribute.json') as f:
     attributes = json.load(f)
 value_to_attribute = {}
 for attribute, values in attributes.items():
@@ -41,9 +41,12 @@ def sanitize(name):
 
     return re.sub(cleanup_regex, '_', temp)
 
-def encode_question(question):
+def encode_sample(question):
+    return (encode_scene(question['sceneGraph']), encode_question(question))
+
+def encode_scene(scene_graph):
     scene_encoding = ""
-    for oid, object in question['sceneGraph']['objects'].items():
+    for oid, object in scene_graph['objects'].items():
         scene_encoding += f"object({oid}).\n"
 
         scene_encoding += f"has_attribute({oid}, class, {sanitize(object['name'])}).\n"
@@ -59,16 +62,16 @@ def encode_question(question):
             else:
                 scene_encoding += f"has_attribute({oid}, any, {sanitize(value)}).\n"
 
-        if (object['x'] + object['w']/2) > question['sceneGraph']['width']/3*2:
+        if (object['x'] + object['w']/2) > scene_graph['width']/3*2:
             scene_encoding += f"has_attribute({oid}, hposition, right).\n"
-        elif (object['x'] + object['w']/2) > question['sceneGraph']['width']/3:
+        elif (object['x'] + object['w']/2) > scene_graph['width']/3:
             scene_encoding += f"has_attribute({oid}, hposition, middle).\n"
         else:
             scene_encoding += f"has_attribute({oid}, hposition, left).\n"
 
-        if (object['y'] + object['h']/2) > question['sceneGraph']['height']/3*2:
+        if (object['y'] + object['h']/2) > scene_graph['height']/3*2:
             scene_encoding += f"has_attribute({oid}, vposition, bottom).\n"
-        if (object['y'] + object['h']/2) > question['sceneGraph']['height']/3:
+        if (object['y'] + object['h']/2) > scene_graph['height']/3:
             scene_encoding += f"has_attribute({oid}, vposition, middle).\n"
         else:
             scene_encoding += f"has_attribute({oid}, vposition, top).\n"
@@ -76,6 +79,9 @@ def encode_question(question):
         for rel in object['relations']:
             scene_encoding += f"has_relation({oid}, {sanitize(rel['name'])}, {sanitize(rel['object'])}).\n"
 
+    return scene_encoding
+
+def encode_question(question):
     question_encoding = ""
     step_padding = 0
     ops_map = {}
@@ -214,12 +220,11 @@ def encode_question(question):
         ops_map[i] = i + step_padding
 
     question_encoding += f"end({len(question['semantic'])+step_padding-1})."
-    return (scene_encoding, question_encoding)
-
+    return question_encoding
 
 if __name__ == '__main__':
-    question_and_scene_graph_file = '../../data/gqa/questions/train_sampled_questions_10000.json'
-    target_folder = '../../data/gqa/encoded_questions'
+    question_and_scene_graph_file = '../data/questions/train_sampled_questions_10000.json'
+    target_folder = '../data/encoded_questions'
 
     with open(question_and_scene_graph_file) as f:
         questions = json.load(f)

@@ -559,4 +559,5 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/macos,windows,linux,jetbrains+all,visualstudiocode,python,c++,jupyternotebooks,node,java
 
-data
+data/**/*
+!data/.gitkeep
