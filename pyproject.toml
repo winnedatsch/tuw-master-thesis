@@ -20,7 +20,11 @@ timm = "^0.6.12"
 matplotlib = "^3.7.1"
 
 [tool.poetry.group.dev.dependencies]
+jupyter-client = "7.3.2"
+tornado = "6.1"
 notebook = "^6.5.2"
+ipywidgets = "^8.0.4"
+
 
 [build-system]
 requires = ["poetry-core"]
