@@ -1,6 +1,6 @@
 import json 
 import re
-# from pattern.text.en import singularize
+from pattern.text.en import singularize
 
 with open('../data/metadata/gqa_all_class.json') as f:
     categories = json.load(f)
@@ -36,7 +36,7 @@ def sanitize(name):
     if temp in irregulars:
         temp = irregulars[temp]
     elif not (temp.split(' ')[-1] in plurale_tantum or temp[-2:] == 'ss'):
-        temp = temp # singularize(temp)
+        temp = singularize(temp)
     cleanup_regex = r'[^\w]'
 
     return re.sub(cleanup_regex, '_', temp)
