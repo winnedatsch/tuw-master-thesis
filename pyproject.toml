@@ -20,6 +20,7 @@ torchvision = "^0.15.1"
 timm = "^0.6.12"
 matplotlib = "^3.7.1"
 nltk = "^3.8.1"
+pandas = "^1.5.3"
 
 [tool.poetry.group.dev.dependencies]
 jupyter-client = "7.3.2"

@@ -125,7 +125,6 @@ def encode_question(question):
             question_encoding += f"common({i+step_padding}, {dependencies[0]}, {dependencies[1]}).\n"
 
         elif operation['operation'] == 'filter':
-            attr = sanitize(' '.join(operation['operation'].split(' ')[1:]))
             if operation['argument'].startswith('not('):
                 value = sanitize(operation['argument'][4:-1])
                 question_encoding += f"filter_any({i+step_padding}, {dependencies[0]}, {value}).\n"
