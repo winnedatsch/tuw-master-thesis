@@ -561,3 +561,4 @@ $RECYCLE.BIN/
 
 data/**/*
 !data/.gitkeep
+pretrained_models
