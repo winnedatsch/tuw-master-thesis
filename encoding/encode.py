@@ -110,7 +110,9 @@ def encode_question(question):
                     question_encoding += f"relate({i+step_padding}, {dependencies[0]}, {target_class}, {relation_type}, {position}).\n"
 
         elif operation['operation'] == 'query':
-            question_encoding += f"query_attr({i+step_padding}, {dependencies[0]}, {operation['argument']}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"query_attr({i+step_padding+1}, {i+step_padding}, {operation['argument']}).\n"
+            step_padding += 1
 
         elif operation['operation'] == 'exist':
             question_encoding += f"exist({i+step_padding}, {dependencies[0]}).\n"

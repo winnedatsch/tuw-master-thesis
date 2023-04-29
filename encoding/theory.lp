@@ -10,6 +10,7 @@
 
 #defined has_attribute/3.
 #defined has_relation/3.
+#defined is_attribute_value/2.
 
 % ------- Rules for operations -------
 % scene
@@ -32,16 +33,17 @@ bool(T,no) :- or(T, RT0, RT1), not bool(T,yes).
 
 % choose_attr
 #defined choose_attr/5.
-
+1 {has_attribute(ID, ATTR, VALUE); has_attribute(ID, ATTR, VALUE')} 1:- choose_attr(T, RT, ATTR, VALUE, VALUE'), state(RT, ID).
 attr_value(T, VALUE) :- choose_attr(T, RT, ATTR, VALUE, VALUE'), state(RT, ID), has_attribute(ID, ATTR, VALUE).
 attr_value(T, VALUE') :- choose_attr(T, RT, ATTR, VALUE, VALUE'), state(RT, ID), has_attribute(ID, ATTR, VALUE').
 
 % choose_rel
 #defined choose_rel/6.
-
+1 {has_relation(ID', REL, ID): object(ID'); has_relation(ID', REL', ID): object(ID')} 1 :- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS).
 rel(T, REL) :- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID', REL, ID).
 rel(T, REL') :- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID', REL', ID).
 
+1 {has_relation(ID, REL, ID'): object(ID'); has_relation(ID, REL', ID'): object(ID')} 1:- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS).
 rel(T, REL) :- choose_rel(T, RT, CLASS, REL, REL', object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL, ID').
 rel(T, REL') :- choose_rel(T, RT, CLASS, REL, REL', object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL', ID').
 
@@ -81,6 +83,7 @@ state(T, ID) :- negate(T, RT, SRT), state(SRT, ID), not state(RT, ID).
 % query_attr
 #defined query_attr/3.
 
+1 { has_attribute(ID, ATTR, VALUE) : is_attribute_value(ATTR, VALUE)} 1 :- query_attr(T, RT, ATTR), state(RT, ID), ATTR != name, ATTR != class, ATTR != hposition, ATTR != vposition.
 attr_value(T,VALUE) :- query_attr(T, RT, ATTR), state(RT, ID), has_attribute(ID, ATTR, VALUE).
 
 % relate
