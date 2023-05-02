@@ -6,13 +6,21 @@ class BaseModel(ABC):
         self.gpu = gpu
     
     @abstractmethod
-    def image_preprocess(self, images):
+    def preprocess_images(self, images):
         pass
 
     @abstractmethod
-    def text_preprocess(self, texts):
+    def preprocess_texts(self, texts):
         pass
 
     @abstractmethod
     def score(self, images, texts):
+        pass
+
+    @abstractmethod
+    def get_image_features(self, images):
+        pass
+    
+    @abstractmethod
+    def get_text_features(self, texts):
         pass

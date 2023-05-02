@@ -67,13 +67,13 @@ class XVLMModel(BaseModel):
 
         return caption
 
-    def image_preprocess(self, images):
+    def preprocess_images(self, images):
         images = [self.transform(image) for image in images]
         images = torch.stack(images, dim=0).to(self.gpu)
         image_embeds, _ = self.model.get_vision_embeds(images)
         return image_embeds
 
-    def text_preprocess(self, texts):
+    def preprocess_texts(self, texts):
         texts = [self.__pre_caption__(text, self.max_words) for text in texts]
         text_input = self.tokenizer(texts, padding='longest', return_tensors="pt").to(self.gpu)
         text_ids, text_atts = text_input.input_ids, text_input.attention_mask
@@ -81,8 +81,16 @@ class XVLMModel(BaseModel):
         return text_embeds
 
     def score(self, images, texts):
-        text_inputs = self.text_preprocess(texts)
-        image_inputs = self.image_preprocess(images)
+        text_inputs = self.preprocess_texts(texts)
+        image_inputs = self.preprocess_images(images)
 
         image_feat, text_feat = self.model.get_features(image_inputs, text_inputs)
         return image_feat @ text_feat.t()
+    
+    def get_image_features(self, images):
+        image_inputs = self.preprocess_images(images)
+        return self.model.get_features(image_embeds=image_inputs)
+    
+    def get_text_features(self, texts):
+        text_inputs = self.preprocess_texts(texts)
+        return self.model.get_features(text_embeds=text_inputs)
