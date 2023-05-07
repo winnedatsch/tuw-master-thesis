@@ -1,4 +1,4 @@
-from models.base_model import BaseModel
+from model.base_model import BaseModel
 from torch.utils.data import Dataset, DataLoader
 import torch 
 

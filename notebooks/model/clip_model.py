@@ -1,4 +1,4 @@
-from models.base_model import BaseModel
+from model.base_model import BaseModel
 from transformers import CLIPModel as TCLIPModel, CLIPImageProcessor, CLIPTokenizer
 
 class CLIPModel(BaseModel):

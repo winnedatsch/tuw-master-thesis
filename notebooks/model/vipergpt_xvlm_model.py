@@ -1,4 +1,4 @@
-from models.base_model import BaseModel
+from model.base_model import BaseModel
 from base_models.xvlm.xvlm import XVLMBase
 from transformers import BertTokenizer
 import torch
