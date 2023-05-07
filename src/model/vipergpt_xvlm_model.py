@@ -1,5 +1,5 @@
 from model.base_model import BaseModel
-from base_models.xvlm.xvlm import XVLMBase
+from viper_gpt.xvlm import XVLMBase
 from transformers import BertTokenizer
 import torch
 from torchvision import transforms
@@ -30,7 +30,7 @@ class XVLMModel(BaseModel):
         }
 
         model = XVLMBase(config_xvlm, use_contrastive_loss=True, vision_config=vision_config)
-        checkpoint = torch.load('../viper/pretrained_models/xvlm/retrieval_mscoco_checkpoint_9.pth', map_location='cpu')
+        checkpoint = torch.load('../data/models/xvlm_vipergpt/retrieval_mscoco_checkpoint_9.pth', map_location='cpu')
         state_dict = checkpoint['model'] if 'model' in checkpoint.keys() else checkpoint
         model.load_state_dict(state_dict, strict=False)
 

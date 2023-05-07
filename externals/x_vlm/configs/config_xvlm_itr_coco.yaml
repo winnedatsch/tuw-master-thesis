@@ -1,11 +1,11 @@
-train_file:  ['../projects/x_vlm/data/finetune/coco_train.json']
-val_file: '../projects/x_vlm/data/finetune/coco_val.json'
-test_file: '../projects/x_vlm/data/finetune/coco_test.json'
-image_root: '../projects/x_vlm/images/coco/'
+train_file:  ['../externals/x_vlm/data/finetune/coco_train.json']
+val_file: '../externals/x_vlm/data/finetune/coco_val.json'
+test_file: '../externals/x_vlm/data/finetune/coco_test.json'
+image_root: '../externals/x_vlm/images/coco/'
 
 
 ## Vision Encoder
-vision_config: '../projects/x_vlm/configs/config_swinB_384.json'
+vision_config: '../externals/x_vlm/configs/config_swinB_384.json'
 
 use_clip_vit: False
 #image_res: 384
@@ -18,7 +18,7 @@ patch_size: 32
 
 ## Text Encoder
 use_roberta: False
-text_config: '../projects/x_vlm/configs/config_bert.json'  # ['configs/config_bert.json', 'configs/config_roberta.json']
+text_config: '../externals/x_vlm/configs/config_bert.json'  # ['configs/config_bert.json', 'configs/config_roberta.json']
 text_encoder: '../data/models/bert-base-uncased'  # ['data/bert-base-uncased', 'data/roberta-base']
 
 

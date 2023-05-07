@@ -1,6 +1,7 @@
 from clingo.control import Control 
 import json 
-from encode import encode_sample, sanitize
+from pipeline.encoding.perfect_information_encoding import encode_sample
+from pipeline.encoding.utils import sanitize_asp
 from itertools import islice
 
 with open('../data/questions/train_sampled_questions_10000.json') as f:
@@ -17,7 +18,7 @@ def answer_is_correct(answers, correct_answer):
     correct = False 
 
     for answer in answers:
-        if answer == sanitize(correct_answer): 
+        if answer == sanitize_asp(correct_answer): 
             correct = True
         elif (answer == 'to_the_right_of' and correct_answer == 'right') or \
             (answer == 'to_the_left_of' and correct_answer == 'left') or \

@@ -561,7 +561,5 @@ $RECYCLE.BIN/
 
 data/**/*
 !data/.gitkeep
-externals/**/*
-!externals/.gitkeep
 pretrained_models
 __pycache__

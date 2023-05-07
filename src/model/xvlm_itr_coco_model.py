@@ -1,7 +1,7 @@
 from model.base_model import BaseModel
-from models.model_retrieval import XVLM
-from models.tokenization_bert import BertTokenizer
-from models.tokenization_roberta import RobertaTokenizer
+from x_vlm.models.model_retrieval import XVLM
+from x_vlm.models.tokenization_bert import BertTokenizer
+from x_vlm.models.tokenization_roberta import RobertaTokenizer
 from torchvision import transforms
 import ruamel.yaml as yaml
 import torch
@@ -11,10 +11,10 @@ class XVLMModel(BaseModel):
     def __init__(self, gpu):
         super().__init__(img_size=384, gpu=gpu)
 
-        self.config = yaml.load(open("model/config_xvlm_itr_coco.yaml", "r"), Loader=yaml.Loader)
+        self.config = yaml.load(open("../externals/x_vlm/configs/config_xvlm_itr_coco.yaml", "r"), Loader=yaml.Loader)
 
         self.model = XVLM(self.config)
-        self.model.load_pretrained("../data/models/4m_base_finetune/itr_coco/checkpoint_best.pth", self.config, is_eval=True)
+        self.model.load_pretrained("../data/models/xvlm_original_4m/itr_coco/checkpoint_best.pth", self.config, is_eval=True)
         self.model.to(gpu)
         self.model.eval()
 
