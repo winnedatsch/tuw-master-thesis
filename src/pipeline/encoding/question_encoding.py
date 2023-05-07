@@ -1,4 +1,4 @@
-from pipeline.encoding.utils import sanitize_asp
+from pipeline.utils import sanitize_asp
 
 def encode_question(question):
     question_encoding = ""

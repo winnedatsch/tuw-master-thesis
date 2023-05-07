@@ -1,7 +1,7 @@
 from clingo.control import Control 
 import json 
 from pipeline.encoding.perfect_information_encoding import encode_sample
-from pipeline.encoding.utils import sanitize_asp
+from pipeline.utils import sanitize_asp
 from itertools import islice
 
 with open('../data/questions/train_sampled_questions_10000.json') as f:

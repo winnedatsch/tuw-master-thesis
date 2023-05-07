@@ -1,6 +1,6 @@
 import json 
 from pipeline.encoding.question_encoding import encode_question
-from pipeline.encoding.utils import sanitize_asp
+from pipeline.utils import sanitize_asp
 
 with open('../data/metadata/gqa_all_class.json') as f:
     categories = json.load(f)

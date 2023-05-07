@@ -2,11 +2,12 @@ from torchvision.io import read_image, ImageReadMode
 from torchvision.transforms.functional import crop, resize, pad
 from pipeline.concept_extraction import extract_classes, extract_attributes, extract_relations
 from pipeline.bounding_box_optimization import get_object_bboxes, get_pair_bboxes
-from pipeline.encoding.utils import cleanup_whitespace, sanitize_asp
+from pipeline.utils import cleanup_whitespace, sanitize_asp
 import math
 import torch
 import re
 import json
+import itertools
 
 def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
     bbox_crops = []
@@ -47,14 +48,14 @@ def prob_to_asp_weight(prob):
 with open('../data/metadata/gqa_all_attribute.json') as f:
     all_attributes = json.load(f)
 
+with open('../data/metadata/gqa_all_class.json') as f:
+    all_classes = json.load(f)
+    all_child_classes = [c.replace("_", " ") for c in itertools.chain(*all_classes.values())]
+
 @torch.no_grad()
-def encode_scene(question, model):
+def encode_scene(question, model, object_detector):
     scene_encoding = ""
     
-    scene_graph = question['sceneGraph']
-    objects = scene_graph['objects'].values()
-    object_items = scene_graph['objects'].items()
-    num_objects = len(objects)
     attributes, standalone_values = extract_attributes(question)
     num_attr_values = sum(len(all_attributes.get(attr, [])) for attr in attributes)
     num_standalone_values = len(standalone_values)
@@ -70,9 +71,15 @@ def encode_scene(question, model):
 
 
     image = read_image(f"../data/images/{question['imageId']}.jpg", ImageReadMode.RGB)
+    image_size = {'w': image.shape[2], 'h': image.shape[1]}
+
+    detected_objects = object_detector.detect_objects(image, all_child_classes)
+    objects = list(detected_objects.values())
+    object_items = list(detected_objects.items())
+    num_objects = len(objects)
 
     if len(attributes) > 0 or len(standalone_values) > 0 or len(classes) > 0:
-        object_bboxes = get_object_bboxes(question)
+        object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
         attr_prompts = [f"a bad photo of a {val} object"
                         for object in objects
@@ -89,8 +96,8 @@ def encode_scene(question, model):
         obj_logits_per_image = model.score(
             obj_bbox_crops, [*attr_prompts, *standalone_value_prompts, *class_prompts])
             
-    if len(relations) > 0:
-        rel_bboxes, rel_bbox_indices = get_pair_bboxes(question, merge_threshold=0.6)
+    if len(relations) > 0 and len(objects) > 1:
+        rel_bboxes, rel_bbox_indices = get_pair_bboxes(objects, merge_threshold=0.6)
         rel_bbox_crops = bboxes_to_image_crops(rel_bboxes, image, model)
     
     # add attributes derived from object detection (names, vposition/hposition)
@@ -100,16 +107,16 @@ def encode_scene(question, model):
         # scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(object['name'])}).\n"
         scene_encoding += f"has_attribute({oid1}, name, {sanitize_asp(object1['name'])}).\n"
 
-        if (object1['x'] + object1['w']/2) > scene_graph['width']/3*2:
+        if (object1['x'] + object1['w']/2) > image_size["w"]/3*2:
             scene_encoding += f"has_attribute({oid1}, hposition, right).\n"
-        elif (object1['x'] + object1['w']/2) > scene_graph['width']/3:
+        elif (object1['x'] + object1['w']/2) > image_size["w"]/3:
             scene_encoding += f"has_attribute({oid1}, hposition, middle).\n"
         else:
             scene_encoding += f"has_attribute({oid1}, hposition, left).\n"
 
-        if (object1['y'] + object1['h']/2) > scene_graph['height']/3*2:
+        if (object1['y'] + object1['h']/2) > image_size["h"]/3*2:
             scene_encoding += f"has_attribute({oid1}, vposition, bottom).\n"
-        elif (object1['y'] + object1['h']/2) > scene_graph['height']/3:
+        elif (object1['y'] + object1['h']/2) > image_size["h"]/3:
             scene_encoding += f"has_attribute({oid1}, vposition, middle).\n"
         else:
             scene_encoding += f"has_attribute({oid1}, vposition, top).\n"
@@ -174,7 +181,7 @@ def encode_scene(question, model):
             del class_scores, class_probs
 
         # get cosine similarities between relations and every object pair's image crop
-        if len(relations) > 0:
+        if len(relations) > 0 and len(objects) > 1:
             rel_prompts = []
             for oid2, object2 in object_items:
                 if oid2 != oid1:

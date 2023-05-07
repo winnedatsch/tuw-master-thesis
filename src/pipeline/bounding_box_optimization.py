@@ -6,12 +6,12 @@ def scaling(x, ceiling=3):
     return (1 - tanh(x * 2)) * ceiling
 
 
-def get_object_bboxes(question, padding_scale_ceiling=1):
-    img_width = question['sceneGraph']['width'] - 1
-    img_height = question['sceneGraph']['height'] - 1
+def get_object_bboxes(objects, img_size, padding_scale_ceiling=1):
+    img_width = img_size['w'] - 1
+    img_height = img_size['h'] - 1
 
     bboxes = []
-    for object in question['sceneGraph']['objects'].values():
+    for object in objects:
         padding_w = scaling(object['w'] / img_width, padding_scale_ceiling) * object['w']
         padding_h = scaling(object['h'] / img_height, padding_scale_ceiling) * object['h']
 
@@ -55,15 +55,15 @@ def merge_boxes(boxes, overlap_threshold):
     boxes = [b for b in boxes if b]
     return boxes 
 
-def get_pair_bboxes(question, merge_threshold = 0.7):
-    num_objects = len(question['sceneGraph']['objects'].values())
+def get_pair_bboxes(objects, merge_threshold = 0.7):
+    num_objects = len(objects)
     bbox_indices = np.full([num_objects, num_objects], -1)
     
     joined_bboxes = []
     for i in range(num_objects):
         for j in range(i+1, num_objects):
-            object1 = list(question['sceneGraph']['objects'].values())[i]
-            object2 = list(question['sceneGraph']['objects'].values())[j]
+            object1 = objects[i]
+            object2 = objects[j]
 
             joined_bboxes.append(({(i,j)}, (
                 min(object1['y'], object2['y']),

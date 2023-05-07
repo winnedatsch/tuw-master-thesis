@@ -1,5 +1,5 @@
 import json 
-from pipeline.encoding.utils import sanitize
+from pipeline.utils import sanitize
 
 with open('../data/metadata/gqa_all_attribute.json') as f:
     all_attributes = json.load(f)
