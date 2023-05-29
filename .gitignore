@@ -563,3 +563,6 @@ data/**/*
 !data/.gitkeep
 pretrained_models
 __pycache__
+
+notebooks/model_snapshots
+notebooks/runs
