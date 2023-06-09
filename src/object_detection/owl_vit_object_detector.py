@@ -6,12 +6,11 @@ from object_detection.object_detector import BaseObjectDetector
 
 
 class OWLViTObjectDetector(BaseObjectDetector):
-    def __init__(self, gpu, threshold=0.1):
+    def __init__(self, gpu):
         super().__init__(gpu)
 
         self.model = AutoModelForZeroShotObjectDetection.from_pretrained("google/owlvit-base-patch32")
         self.processor = AutoProcessor.from_pretrained("google/owlvit-base-patch32")
-        self.threshold = threshold
 
     def __should_merge__(self, box1, box2, overlap_threshold):
         YA1, XA1, YA2, XA2 = box1 
@@ -59,14 +58,14 @@ class OWLViTObjectDetector(BaseObjectDetector):
         return sorted(objects, key=lambda o: o["score"], reverse=True)[:k]
 
     @torch.no_grad()
-    def detect_objects(self, image, classes, k=20):
+    def detect_objects(self, image, classes, threshold=0.1, k=20):
         text_queries = classes
         inputs = self.processor(text=text_queries, images=F.to_pil_image(image), return_tensors="pt")
 
         outputs = self.model(**inputs)
         target_sizes = torch.tensor([(image.shape[1], image.shape[2])])
         results = self.processor.post_process_object_detection(
-            outputs, threshold=self.threshold, target_sizes=target_sizes)[0]
+            outputs, threshold=threshold, target_sizes=target_sizes)[0]
     
         scores = results["scores"].tolist()
         labels = results["labels"].tolist()
@@ -85,6 +84,10 @@ class OWLViTObjectDetector(BaseObjectDetector):
             })
 
         merged_objects = self.__merge_objects__(detected_objects, overlap_threshold=0.6)
-        top_k_objects = self.__choose_top_k_objects__(merged_objects, k)
 
-        return {f"o{i}": object for i, object in enumerate(top_k_objects)}
+        if k is not None:
+            top_k_objects = self.__choose_top_k_objects__(merged_objects, k)
+        else:
+            top_k_objects = merged_objects
+
+        return top_k_objects

@@ -11,6 +11,8 @@
 #defined has_attribute/3.
 #defined has_relation/3.
 #defined is_attribute_value/2.
+#defined object/1.
+#defined has_object_weight/2.
 
 % ------- Rules for operations -------
 % scene
@@ -141,8 +143,8 @@ bool(T,yes) :- all_same(T, RT, ATTR), not bool(T,no).
 % unique
 #defined unique/2.
 
-state(T,ID) :- unique(T, RT), state(RT,ID).
-:- unique(T, RT), state(RT,ID), state(RT,ID'), ID!=ID'.
+{state(T,ID): state(RT,ID)} = 1 :- unique(T, RT).
+:~ unique(T, RT), state(T,ID), has_object_weight(ID, P). [P, (T, ID)]
 
 % verify_attr
 #defined verify_attr/4.

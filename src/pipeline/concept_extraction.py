@@ -1,9 +1,11 @@
 import json 
-from pipeline.utils import sanitize
+from pipeline.utils import sanitize, sanitize_asp
 
 with open('../data/metadata/gqa_all_attribute.json') as f:
     all_attributes = json.load(f)
 
+with open('../data/metadata/gqa_all_class.json') as f:
+    all_categories = json.load(f)
 
 def extract_attributes(question):
     attributes = set()
@@ -45,19 +47,33 @@ def extract_attributes(question):
 
 
 def extract_classes(question):
-    classes = set()
+    classes = {
+        "categories": set(),
+        "classes": set(),
+        "all": False
+    }
+
+    def add_class_or_category(c):
+        c = sanitize_asp(c)
+        if c in all_categories.keys():
+            classes["categories"].add(c)
+        else: 
+            classes["classes"].add(c)
+            
     for operation in question['semantic']:
         if operation['operation'] == 'select':
-            classes.add(operation['argument'].split('(')[0])
+            add_class_or_category(operation['argument'].split('(')[0])
         elif operation['operation'] == 'relate':
             target_class = operation['argument'].split(',')[0]
             if target_class != '_':
-                classes.add(target_class)
+                add_class_or_category(target_class)
+            else: 
+                classes["all"] = True
         elif operation['operation'] == 'choose rel':
-            classes.add(operation['argument'].split(',')[0])
+            add_class_or_category(operation['argument'].split(',')[0])
         elif operation['operation'] == 'verify rel':
-            classes.add(operation['argument'].split(',')[0])
-    return {sanitize(c) for c in classes}
+            add_class_or_category(operation['argument'].split(',')[0])
+    return classes
 
 
 def extract_relations(question):

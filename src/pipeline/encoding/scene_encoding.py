@@ -5,9 +5,17 @@ from pipeline.bounding_box_optimization import get_object_bboxes, get_pair_bboxe
 from pipeline.utils import cleanup_whitespace, sanitize_asp
 import math
 import torch
-import re
 import json
 import itertools
+
+
+with open('../data/metadata/gqa_all_attribute.json') as f:
+    all_attributes = json.load(f)
+
+with open('../data/metadata/gqa_all_class.json') as f:
+    all_classes = json.load(f)
+    all_child_classes = [c.replace("_", " ") for c in itertools.chain(*all_classes.values())]
+
 
 def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
     bbox_crops = []
@@ -44,13 +52,59 @@ def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
 def prob_to_asp_weight(prob):
     return int(min(-1000*math.log(prob), 5000))
 
+def __should_merge__(box1, box2, overlap_threshold):
+        YA1, XA1, YA2, XA2 = box1 
+        YB1, XB1, YB2, XB2 = box2
+        box1_area = (YA2 - YA1) * (XA2 - XA1)
+        box2_area = (YB2 - YB1) * (XB2 - XB1)
+        intersection_area = max(0, min(XA2, XB2) - max(XA1, XB1)) * max(0, min(YA2, YB2) - max(YA1, YB1))
+        union_area = box1_area + box2_area - intersection_area
 
-with open('../data/metadata/gqa_all_attribute.json') as f:
-    all_attributes = json.load(f)
+        if intersection_area / union_area > overlap_threshold:
+            return True, (
+                min(box1[0], box2[0]),
+                min(box1[1], box2[1]),
+                max(box1[2], box2[2]),
+                max(box1[3], box2[3]),
+            )
 
-with open('../data/metadata/gqa_all_class.json') as f:
-    all_classes = json.load(f)
-    all_child_classes = [c.replace("_", " ") for c in itertools.chain(*all_classes.values())]
+        return False, None
+
+def merge_detected_objects(objects_a, objects_b):
+    objects = [*objects_a]
+    for ob in objects_b:
+        alread_present = False
+        for oa in objects_a:
+            categories_a = {cat for cat in all_classes if oa["name"] in all_classes[cat]}
+            categories_b = {cat for cat in all_classes if ob["name"] in all_classes[cat]}
+            if len(categories_a & categories_b) > 0:
+                is_merge, _ = __should_merge__(
+                        (oa['y'], oa['x'], oa['y']+oa['h'], oa['x']+oa['w']), 
+                        (ob['y'], ob['x'], ob['y']+ob['h'], ob['x']+ob['w']), 
+                        overlap_threshold=0.7
+                    )
+                if is_merge:
+                    alread_present = True
+        if not alread_present:
+            objects.append(ob)
+
+    return objects
+
+def detect_objects_question_driven(image, classes, object_detector):
+    objects = []
+    print(f"\t{classes}")
+    for clazz in classes["classes"]:
+        detected_objects = object_detector.detect_objects(image, [clazz.replace("_", " ")], threshold=0.03, k=5)
+        objects.extend(detected_objects)
+
+    for category in classes["categories"]:
+        detected_objects = object_detector.detect_objects(image, [c.replace("_", " ") for c in all_classes[category]], threshold=0.03, k=5)
+        objects = merge_detected_objects(objects, detected_objects)
+
+    if classes["all"]:
+        detected_objects = object_detector.detect_objects(image, all_child_classes, threshold=0.03, k=20)
+        objects = merge_detected_objects(objects, detected_objects)
+    return objects
 
 @torch.no_grad()
 def encode_scene(question, model, object_detector):
@@ -60,7 +114,6 @@ def encode_scene(question, model, object_detector):
     num_attr_values = sum(len(all_attributes.get(attr, [])) for attr in attributes)
     num_standalone_values = len(standalone_values)
     classes = extract_classes(question)
-    num_classes = len(classes)
     relations = extract_relations(question)
     num_relations = len(relations)
 
@@ -73,28 +126,25 @@ def encode_scene(question, model, object_detector):
     image = read_image(f"../data/images/{question['imageId']}.jpg", ImageReadMode.RGB)
     image_size = {'w': image.shape[2], 'h': image.shape[1]}
 
-    detected_objects = object_detector.detect_objects(image, all_child_classes)
-    objects = list(detected_objects.values())
-    object_items = list(detected_objects.items())
+    objects = detect_objects_question_driven(image, classes, object_detector)
+    object_items = [(f"o{i}", o) for i, o in enumerate(objects)]
     num_objects = len(objects)
 
-    if len(attributes) > 0 or len(standalone_values) > 0 or len(classes) > 0:
+    if (len(attributes) > 0 or len(standalone_values) > 0) and len(objects) > 0: # or len(classes) > 0:
         object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
         attr_prompts = [f"a bad photo of a {val} object"
-                        for object in objects
+                        for _ in objects
                         for attr in attributes
                         for val in all_attributes.get(attr, [])]
         attr_prompts.append("a bad photo of an object")
         standalone_value_prompts = [f"a bad photo of a {val} object"
-                                    for object in objects
+                                    for _ in objects
                                     for val in standalone_values]
         standalone_value_prompts.append("a bad photo of an object")
-        class_prompts = [f"a bad photo of a {class_}" for class_ in classes]
-        class_prompts.append("a bad photo of an object")
 
         obj_logits_per_image = model.score(
-            obj_bbox_crops, [*attr_prompts, *standalone_value_prompts, *class_prompts])
+            obj_bbox_crops, [*attr_prompts, *standalone_value_prompts]) #, *class_prompts])
             
     if len(relations) > 0 and len(objects) > 1:
         rel_bboxes, rel_bbox_indices = get_pair_bboxes(objects, merge_threshold=0.6)
@@ -103,8 +153,13 @@ def encode_scene(question, model, object_detector):
     # add attributes derived from object detection (names, vposition/hposition)
     for o1, (oid1, object1) in enumerate(object_items):
         scene_encoding += f"object({oid1}).\n"
+        scene_encoding += f"has_object_weight({oid1}, {prob_to_asp_weight(object1['score'])}).\n"
 
-        # scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(object['name'])}).\n"
+        scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(object1['name'])}).\n"
+        for category in all_classes: 
+            if object1["name"] in all_classes[category]:
+                scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(category)}).\n"
+        
         scene_encoding += f"has_attribute({oid1}, name, {sanitize_asp(object1['name'])}).\n"
 
         if (object1['x'] + object1['w']/2) > image_size["w"]/3*2:
@@ -161,24 +216,6 @@ def encode_scene(question, model, object_detector):
                 k += 1
 
             del standalone_scores, standalone_probs
-
-        if len(classes) > 0:
-            attr_standalone_indices = num_objects*(num_attr_values+num_standalone_values)+2
-            class_scores = torch.stack([
-                obj_logits_per_image[o1, attr_standalone_indices:attr_standalone_indices+num_classes],
-                obj_logits_per_image[o1, attr_standalone_indices+num_classes].expand(num_classes)
-            ])
-            class_probs = torch.nn.functional.softmax(class_scores, dim=0)
-
-            l = 0
-            for class_ in classes:
-                scene_encoding += f"{{has_attribute({oid1}, class, {cleanup_whitespace(class_)})}}.\n"
-                scene_encoding += f":~ has_attribute({oid1}, class, {cleanup_whitespace(class_)}). [{prob_to_asp_weight(class_probs[0,l])}, ({oid1}, class, {cleanup_whitespace(class_)})]\n"
-                scene_encoding += f":~ not has_attribute({oid1}, class, {cleanup_whitespace(class_)}). [{prob_to_asp_weight(class_probs[1,l])}, ({oid1}, class, {cleanup_whitespace(class_)})]\n"
-                l += 1
-            scene_encoding += "\n"
-
-            del class_scores, class_probs
 
         # get cosine similarities between relations and every object pair's image crop
         if len(relations) > 0 and len(objects) > 1:

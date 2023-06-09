@@ -5,5 +5,5 @@ class BaseObjectDetector(ABC):
         self.gpu = gpu
     
     @abstractmethod
-    def detect_objects(self, image, classes, k):
+    def detect_objects(self, image, classes, threshold, k):
         pass
