@@ -133,18 +133,17 @@ def encode_scene(question, model, object_detector):
     if (len(attributes) > 0 or len(standalone_values) > 0) and len(objects) > 0: # or len(classes) > 0:
         object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
-        attr_prompts = [f"a bad photo of a {val} object"
-                        for _ in objects
+       
+        neutral_prompts = [f"a bad photo of a {obj['name']}" for obj in objects]
+        attr_prompts = [f"a bad photo of a {val} {obj['name']}"
+                        for obj in objects
                         for attr in attributes
                         for val in all_attributes.get(attr, [])]
-        attr_prompts.append("a bad photo of an object")
-        standalone_value_prompts = [f"a bad photo of a {val} object"
-                                    for _ in objects
+        standalone_value_prompts = [f"a bad photo of a {val} {obj['name']}"
+                                    for obj in objects
                                     for val in standalone_values]
-        standalone_value_prompts.append("a bad photo of an object")
-
-        obj_logits_per_image = model.score(
-            obj_bbox_crops, [*attr_prompts, *standalone_value_prompts]) #, *class_prompts])
+        
+        obj_logits_per_image = model.score(obj_bbox_crops, [*neutral_prompts, *attr_prompts, *standalone_value_prompts])
             
     if len(relations) > 0 and len(objects) > 1:
         rel_bboxes, rel_bbox_indices = get_pair_bboxes(objects, merge_threshold=0.6)
@@ -177,10 +176,11 @@ def encode_scene(question, model, object_detector):
             scene_encoding += f"has_attribute({oid1}, vposition, top).\n"
         scene_encoding += "\n"
 
+        neutral_indices = num_objects
         if len(attributes) > 0:    
             attr_scores = torch.stack([
-                obj_logits_per_image[o1, o1*(num_attr_values):(o1+1)*num_attr_values],
-                obj_logits_per_image[o1, num_objects*num_attr_values].expand(num_attr_values)
+                obj_logits_per_image[o1, neutral_indices+o1*(num_attr_values):neutral_indices+(o1+1)*num_attr_values],
+                obj_logits_per_image[o1, o1].expand(num_attr_values)
             ])
             attr_probs = torch.nn.functional.softmax(attr_scores, dim=0)  
 
@@ -199,10 +199,10 @@ def encode_scene(question, model, object_detector):
             del attr_scores, attr_probs
 
         if len(standalone_values) > 0:
-            attr_indices = num_objects*(num_attr_values)+1
+            attr_indices = num_objects*num_attr_values
             standalone_scores = torch.stack([
-                obj_logits_per_image[o1, attr_indices+o1*num_standalone_values:attr_indices+(o1+1)*num_standalone_values],
-                obj_logits_per_image[o1, attr_indices+num_objects*num_standalone_values].expand(num_standalone_values)
+                obj_logits_per_image[o1, (neutral_indices+attr_indices)+o1*num_standalone_values:(neutral_indices+attr_indices)+(o1+1)*num_standalone_values],
+                obj_logits_per_image[o1, o1].expand(num_standalone_values)
             ])
             standalone_probs = torch.nn.functional.softmax(standalone_scores, dim=0)
 
