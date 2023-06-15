@@ -1,4 +1,4 @@
-from model.base_model import BaseModel
+from model.vision_language_model import VisionLanguageModel
 from x_vlm.models.model_retrieval import XVLM
 from x_vlm.models.tokenization_bert import BertTokenizer
 from x_vlm.models.tokenization_roberta import RobertaTokenizer
@@ -7,7 +7,7 @@ import ruamel.yaml as yaml
 import torch
 import torch.nn.functional as F
 
-class XVLMModel(BaseModel):
+class XVLMModel(VisionLanguageModel):
     def __init__(self, gpu):
         super().__init__(img_size=384, gpu=gpu)
 

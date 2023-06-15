@@ -1,7 +1,7 @@
-from model.base_model import BaseModel
+from model.vision_language_model import VisionLanguageModel
 from transformers import BlipModel, BlipImageProcessor, BertTokenizerFast, BatchEncoding
 
-class BLIPModel(BaseModel):
+class BLIPModel(VisionLanguageModel):
     def __init__(self, gpu):
         super().__init__(img_size=384, gpu=gpu)
 

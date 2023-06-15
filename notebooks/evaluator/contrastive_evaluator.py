@@ -1,4 +1,4 @@
-from model.base_model import BaseModel
+from model.vision_language_model import VisionLanguageModel
 from torch.utils.data import Dataset, DataLoader
 from torch.nn.functional import softmax
 import torch 
@@ -6,7 +6,7 @@ from typing import List
 from scipy.stats import ttest_1samp
 
 class ContrastiveEvaluator:
-    def __init__(self, model: BaseModel, dataset: Dataset, contrast_texts: List[str], batch_size = 32, pvalue=0.05):
+    def __init__(self, model: VisionLanguageModel, dataset: Dataset, contrast_texts: List[str], batch_size = 32, pvalue=0.05):
         self.model = model 
         self.dataset = dataset
         self.batch_size = batch_size

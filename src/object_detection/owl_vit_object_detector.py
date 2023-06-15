@@ -2,10 +2,10 @@ import torch
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 import torchvision.transforms.functional as F
 
-from object_detection.object_detector import BaseObjectDetector
+from object_detection.object_detector import ObjectDetector
 
 
-class OWLViTObjectDetector(BaseObjectDetector):
+class OWLViTObjectDetector(ObjectDetector):
     def __init__(self, gpu, model="google/owlvit-large-patch14"):
         super().__init__(gpu)
 

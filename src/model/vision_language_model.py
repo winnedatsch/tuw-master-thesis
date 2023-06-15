@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-class BaseModel(ABC):
+class VisionLanguageModel(ABC):
     def __init__(self, img_size, gpu):
         self.img_size = img_size
         self.gpu = gpu

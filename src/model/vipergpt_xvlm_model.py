@@ -1,4 +1,4 @@
-from model.base_model import BaseModel
+from model.vision_language_model import VisionLanguageModel
 from viper_gpt.xvlm import XVLMBase
 from transformers import BertTokenizer
 import torch
@@ -6,7 +6,7 @@ from torchvision import transforms
 from PIL import Image
 import re
 
-class XVLMModel(BaseModel):
+class XVLMModel(VisionLanguageModel):
     def __init__(self, gpu):
         super().__init__(img_size=384, gpu=gpu)
 

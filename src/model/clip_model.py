@@ -1,7 +1,7 @@
-from model.base_model import BaseModel
+from model.vision_language_model import VisionLanguageModel
 from transformers import CLIPModel as TCLIPModel, CLIPImageProcessor, CLIPTokenizer
 
-class CLIPModel(BaseModel):
+class CLIPModel(VisionLanguageModel):
     def __init__(self, gpu, model="openai/clip-vit-base-patch32", snapshot=None):
         super().__init__(img_size=224, gpu=gpu)
 

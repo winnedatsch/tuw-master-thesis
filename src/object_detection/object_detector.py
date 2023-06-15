@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-class BaseObjectDetector(ABC):
+class ObjectDetector(ABC):
     def __init__(self, gpu):
         self.gpu = gpu
     

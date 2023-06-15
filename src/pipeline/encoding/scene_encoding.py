@@ -1,3 +1,6 @@
+from model.language_model import LanguageModel
+from model.vision_language_model import VisionLanguageModel
+from object_detection.object_detector import ObjectDetector
 from torchvision.io import read_image, ImageReadMode
 from torchvision.transforms.functional import crop, resize, pad
 from pipeline.concept_extraction import extract_classes, extract_attributes, extract_relations
@@ -7,6 +10,7 @@ import math
 import torch
 import json
 import itertools
+import random
 
 
 with open('../data/metadata/gqa_all_attribute.json') as f:
@@ -50,7 +54,7 @@ def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
 
 
 def prob_to_asp_weight(prob):
-    return int(min(-1000*math.log(prob), 5000))
+    return int(min(-1000*math.log(max([prob, 0.00000000001])), 5000))
 
 def __should_merge__(box1, box2, overlap_threshold):
         YA1, XA1, YA2, XA2 = box1 
@@ -111,7 +115,7 @@ def detect_objects_question_driven(image, classes, object_detector):
     return objects
 
 @torch.no_grad()
-def encode_scene(question, model, object_detector):
+def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: ObjectDetector, llm_model: LanguageModel):
     scene_encoding = ""
     
     attributes, standalone_values = extract_attributes(question)
@@ -138,7 +142,7 @@ def encode_scene(question, model, object_detector):
 
     if (len(attributes) > 0 or len(standalone_values) > 0) and len(objects) > 0:
         object_bboxes = get_object_bboxes(objects, image_size)
-        obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
+        obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, vlm_model)
        
         neutral_prompts = [f"a pixelated picture of {get_article(obj['name'])} {obj['name']}" for obj in objects]
         attr_prompts = [f"a pixelated picture of {get_article(val)} {val} {obj['name']}"
@@ -149,11 +153,11 @@ def encode_scene(question, model, object_detector):
                                     for obj in objects
                                     for val in standalone_values]
         
-        obj_logits_per_image = model.score(obj_bbox_crops, [*neutral_prompts, *attr_prompts, *standalone_value_prompts])
+        obj_logits_per_image = vlm_model.score(obj_bbox_crops, [*neutral_prompts, *attr_prompts, *standalone_value_prompts])
             
     if len(relations) > 0 and len(objects) > 1:
         rel_bboxes, rel_bbox_indices = get_pair_bboxes(objects, merge_threshold=0.6)
-        rel_bbox_crops = bboxes_to_image_crops(rel_bboxes, image, model)
+        rel_bbox_crops = bboxes_to_image_crops(rel_bboxes, image, vlm_model)
     
     # add attributes derived from object detection (names, vposition/hposition)
     for o1, (oid1, object1) in enumerate(object_items):
@@ -224,37 +228,56 @@ def encode_scene(question, model, object_detector):
             del standalone_scores, standalone_probs
 
         # get cosine similarities between relations and every object pair's image crop
+        llm_softmax_temperature = 100
+        llm_weight = 0.5
+
         if len(relations) > 0 and len(objects) > 1:
-            rel_prompts = []
+            rel_prompts_vlm = []
+            rel_prompts_llm = []
             for oid2, object2 in object_items:
                 if oid2 != oid1:
                     for rel in relations:
-                        rel_prompts.append(f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
-                    rel_prompts.append(f"{get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
+                        rel_prompts_vlm.append(f"{object1['name']} {rel} {object2['name']}")
+                        rel_prompts_llm.append(f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
+                    
+                    rel_prompts_vlm.append(f"{object1['name']} and {object2['name']}")
+                    rel_prompts_llm.append(f"{get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
 
-            rel_logits_per_image = model.score(rel_bbox_crops, rel_prompts)
+            rel_logits_per_image = vlm_model.score(rel_bbox_crops, rel_prompts_vlm)
+            rel_perplexity = llm_model.score(rel_prompts_llm)["perplexities"]
             
             m = 0
             for o2, (oid2, object2) in enumerate(object_items):
                 if oid1 != oid2:
-                    rel_scores = torch.stack([
+                    rel_scores_vlm = torch.stack([
                         rel_logits_per_image[rel_bbox_indices[o1, o2], m*(num_relations+1):m*(num_relations+1)+num_relations],
                         rel_logits_per_image[rel_bbox_indices[o1, o2], m*(num_relations+1)+num_relations].expand(num_relations)
                     ])
-                    rel_probs = torch.nn.functional.softmax(rel_scores, dim=0)
+                    rel_probs_vlm = torch.nn.functional.softmax(rel_scores_vlm, dim=0)
+
+                    rel_scores_llm = torch.stack([
+                        rel_perplexity[m*(num_relations+1):m*(num_relations+1)+num_relations],
+                        rel_perplexity[m*(num_relations+1)+num_relations].expand(num_relations)
+                    ])
+                    rel_probs_llm = torch.nn.functional.softmax(rel_scores_llm/llm_softmax_temperature, dim=0)
+                    rel_probs_llm = 1 - rel_probs_llm
 
                     n = 0
                     for rel in relations:
                         scene_encoding += f"{{has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2})}}.\n"
-                        scene_encoding += f":~ has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[0,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
-                        scene_encoding += f":~ not has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[1,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
+
+                        weight_positive = int(prob_to_asp_weight(rel_probs_vlm[0,n]) * (1-llm_weight) + prob_to_asp_weight(rel_probs_llm[0,n]) * llm_weight)
+                        scene_encoding += f":~ has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{weight_positive}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
+                        
+                        weight_negative = int(prob_to_asp_weight(rel_probs_vlm[1,n]) * (1-llm_weight) + prob_to_asp_weight(rel_probs_llm[1,n]) * llm_weight)
+                        scene_encoding += f":~ not has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{weight_negative}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
 
                         n += 1
                     
                     scene_encoding += "\n"
                     m += 1
 
-                    del rel_scores, rel_probs
+                    del rel_scores_vlm, rel_probs_vlm
                 
             del rel_logits_per_image
 

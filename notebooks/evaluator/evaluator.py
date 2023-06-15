@@ -1,9 +1,9 @@
-from model.base_model import BaseModel
+from model.vision_language_model import VisionLanguageModel
 from torch.utils.data import Dataset, DataLoader
 import torch 
 
 class Evaluator:
-    def __init__(self, model: BaseModel, dataset: Dataset, batch_size = 32):
+    def __init__(self, model: VisionLanguageModel, dataset: Dataset, batch_size = 32):
         self.model = model 
         self.dataset = dataset
         self.batch_size = batch_size
