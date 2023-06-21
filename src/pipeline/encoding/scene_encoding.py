@@ -90,6 +90,11 @@ def merge_detected_objects(objects_a, objects_b):
 
     return objects
 
+
+def get_article(name):
+    return "an" if any(name.startswith(v) for v in ["a", "e", "i", "o", "u"]) else "a"
+
+
 def detect_objects_question_driven(image, classes, object_detector):
     objects = []
     print(f"\t{classes}")
@@ -134,12 +139,12 @@ def encode_scene(question, model, object_detector):
         object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
        
-        neutral_prompts = [f"a bad photo of a {obj['name']}" for obj in objects]
-        attr_prompts = [f"a bad photo of a {val} {obj['name']}"
+        neutral_prompts = [f"a bad photo of {get_article(obj['name'])} {obj['name']}" for obj in objects]
+        attr_prompts = [f"a bad photo of {get_article(val)} {val} {obj['name']}"
                         for obj in objects
                         for attr in attributes
                         for val in all_attributes.get(attr, [])]
-        standalone_value_prompts = [f"a bad photo of a {val} {obj['name']}"
+        standalone_value_prompts = [f"a bad photo of {get_article(val)} {val} {obj['name']}"
                                     for obj in objects
                                     for val in standalone_values]
         
@@ -223,8 +228,8 @@ def encode_scene(question, model, object_detector):
             for oid2, object2 in object_items:
                 if oid2 != oid1:
                     for rel in relations:
-                        rel_prompts.append(f"a bad photo of a {object1['name']} {rel} a {object2['name']}")
-                    rel_prompts.append(f"a bad photo of a {object1['name']} and a {object2['name']}")
+                        rel_prompts.append(f"a bad photo of {get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
+                    rel_prompts.append(f"a bad photo of {get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
 
             rel_logits_per_image = model.score(rel_bbox_crops, rel_prompts)
             
