@@ -115,7 +115,7 @@ def detect_objects_question_driven(image, classes, object_detector):
     return objects
 
 @torch.no_grad()
-def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: ObjectDetector, llm_model: LanguageModel):
+def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: ObjectDetector, llm_model: LanguageModel, llm_model_mean_perplexity):
     scene_encoding = ""
     
     attributes, standalone_values = extract_attributes(question)
@@ -228,7 +228,7 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
             del standalone_scores, standalone_probs
 
         # get cosine similarities between relations and every object pair's image crop
-        llm_softmax_temperature = 100
+        llm_softmax_temperature = 1000
         llm_weight = 0.5
 
         if len(relations) > 0 and len(objects) > 1:
@@ -236,12 +236,14 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
             rel_prompts_llm = []
             for oid2, object2 in object_items:
                 if oid2 != oid1:
+                    object1_article = 'an' if any(object1['name'].startswith(v) for v in ['a', 'e', 'i', 'o', 'u']) else 'a'
+                    object2_article = 'an' if any(object2['name'].startswith(v) for v in ['a', 'e', 'i', 'o', 'u']) else 'a'
                     for rel in relations:
                         rel_prompts_vlm.append(f"{object1['name']} {rel} {object2['name']}")
                         rel_prompts_llm.append(f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
                     
                     rel_prompts_vlm.append(f"{object1['name']} and {object2['name']}")
-                    rel_prompts_llm.append(f"{get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
+                    # rel_prompts_llm.append(f"{get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
 
             rel_logits_per_image = vlm_model.score(rel_bbox_crops, rel_prompts_vlm)
             rel_perplexity = llm_model.score(rel_prompts_llm)["perplexities"]
@@ -256,8 +258,8 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
                     rel_probs_vlm = torch.nn.functional.softmax(rel_scores_vlm, dim=0)
 
                     rel_scores_llm = torch.stack([
-                        rel_perplexity[m*(num_relations+1):m*(num_relations+1)+num_relations],
-                        rel_perplexity[m*(num_relations+1)+num_relations].expand(num_relations)
+                        rel_perplexity[m*(num_relations):(m+1)*(num_relations)],
+                        torch.tensor([llm_model_mean_perplexity]).expand(num_relations)
                     ])
                     rel_probs_llm = torch.nn.functional.softmax(rel_scores_llm/llm_softmax_temperature, dim=0)
                     rel_probs_llm = 1 - rel_probs_llm
