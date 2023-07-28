@@ -58,14 +58,18 @@ def encode_question(question):
         elif operation['operation'] == 'choose':
             option0 = sanitize_asp(operation['argument'].split('|')[0])
             option1 = sanitize_asp(operation['argument'].split('|')[1])
-            question_encoding += f"choose_attr({i+step_padding}, {dependencies[0]}, any, {option0}, {option1}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"choose_attr({i+step_padding+1}, {i+step_padding}, any, {option0}, {option1}).\n"
+            step_padding += 1
 
         elif operation['operation'] == 'choose rel':
             target_class = sanitize_asp(operation['argument'].split(',')[0])
             option0 = sanitize_asp(operation['argument'].split(',')[1].split('|')[0])
             option1 = sanitize_asp(operation['argument'].split(',')[1].split('|')[1])
             position = 'subject' if operation['argument'].split(',')[2].startswith('s') else 'object'
-            question_encoding += f"choose_rel({i+step_padding}, {dependencies[0]}, {target_class}, {option0}, {option1}, {position}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"choose_rel({i+step_padding+1}, {i+step_padding}, {target_class}, {option0}, {option1}, {position}).\n"
+            step_padding += 1
 
         elif operation['operation'] == 'same':
             if operation['argument'] == 'type':
@@ -94,27 +98,36 @@ def encode_question(question):
 
         elif operation['operation'] == 'verify':
             value = sanitize_asp(operation['argument'])
-            question_encoding += f"verify_attr({i+step_padding}, {dependencies[0]}, any, {value}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"verify_attr({i+step_padding+1}, {i+step_padding}, any, {value}).\n"
+            step_padding += 1
         
         elif operation['operation'] == 'verify rel':
             target_class = sanitize_asp(operation['argument'].split(',')[0])
             relation_type = sanitize_asp(operation['argument'].split(',')[1])
             position = 'subject' if operation['argument'].split(',')[2].startswith('s') else 'object'
-            question_encoding += f"verify_rel({i+step_padding}, {dependencies[0]}, {target_class}, {relation_type}, {position}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"verify_rel({i+step_padding+1}, {i+step_padding}, {target_class}, {relation_type}, {position}).\n"
+            step_padding += 1
         
         elif operation['operation'].startswith('verify'):
             attr = sanitize_asp(' '.join(operation['operation'].split(' ')[1:]))
             value = sanitize_asp(operation['argument'])
-            question_encoding += f"verify_attr({i+step_padding}, {dependencies[0]}, {attr}, {value}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"verify_attr({i+step_padding+1}, {i+step_padding}, {attr}, {value}).\n"
+            step_padding += 1
 
         elif operation['operation'].startswith('choose'):
             if operation['argument'] == '':
                 op_tokens = operation['operation'].split(' ')
+                question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+                question_encoding += f"unique({i+step_padding+1}, {dependencies[1]}).\n"
+
                 if len(op_tokens) >= 3:
                     if sanitize_asp(op_tokens[1]) == 'more':
-                        question_encoding += f"compare({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {sanitize_asp(op_tokens[2])}, true).\n"
+                        question_encoding += f"compare({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}, {sanitize_asp(op_tokens[2])}, true).\n"
                     elif sanitize_asp(op_tokens[1]) == 'less':
-                        question_encoding += f"compare({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {sanitize_asp(op_tokens[2])}, false).\n"
+                        question_encoding += f"compare({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}, {sanitize_asp(op_tokens[2])}, false).\n"
                 else:
                     token = sanitize_asp(op_tokens[1])
                     if token.endswith('er'):
@@ -122,20 +135,29 @@ def encode_question(question):
                         if token.endswith('i'):
                             token = token[:-1] + 'y'
 
-                    question_encoding += f"compare({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {token}, true).\n"
+                    question_encoding += f"compare({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}, {token}, true).\n"
+                step_padding += 2
             else:
                 attr = sanitize_asp(' '.join(operation['operation'].split(' ')[1:]))
                 option0 = sanitize_asp(operation['argument'].split('|')[0])
                 option1 = sanitize_asp(operation['argument'].split('|')[1])
-                question_encoding += f"choose_attr({i+step_padding}, {dependencies[0]}, {attr}, {option0}, {option1}).\n"
+                question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+                question_encoding += f"choose_attr({i+step_padding+1}, {i+step_padding}, {attr}, {option0}, {option1}).\n"
+                step_padding += 1
 
         elif operation['operation'].startswith('same'):
             attr = sanitize_asp(' '.join(operation['operation'].split(' ')[1:]))
-            question_encoding += f"two_same({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {attr}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"unique({i+step_padding+1}, {dependencies[1]}).\n"
+            question_encoding += f"two_same({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}, {attr}).\n"
+            step_padding += 2
 
         elif operation['operation'].startswith('different'):
             attr = sanitize_asp(' '.join(operation['operation'].split(' ')[1:]))
-            question_encoding += f"two_different({i+step_padding}, {dependencies[0]}, {dependencies[1]}, {attr}).\n" 
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"unique({i+step_padding+1}, {dependencies[1]}).\n"
+            question_encoding += f"two_different({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}, {attr}).\n"
+            step_padding += 2 
         
         ops_map[i] = i + step_padding
 

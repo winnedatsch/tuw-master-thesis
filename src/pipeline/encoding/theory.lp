@@ -143,7 +143,7 @@ bool(T,yes) :- all_same(T, RT, ATTR), not bool(T,no).
 % unique
 #defined unique/2.
 
-{state(T,ID): state(RT,ID)} = 1 :- unique(T, RT).
+1 {state(T,ID): state(RT,ID)} 1 :- unique(T, RT).
 :~ unique(T, RT), state(T,ID), has_object_weight(ID, P). [P, (T, ID)]
 
 % verify_attr

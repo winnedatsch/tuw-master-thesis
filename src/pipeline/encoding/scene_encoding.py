@@ -97,7 +97,6 @@ def get_article(name):
 
 def detect_objects_question_driven(image, classes, object_detector):
     objects = []
-    print(f"\t{classes}")
     for clazz in classes["classes"]:
         detected_objects = object_detector.detect_objects(image, [clazz.replace("_", " ")], threshold=0.03, k=5)
         objects.extend(detected_objects)
@@ -135,16 +134,16 @@ def encode_scene(question, model, object_detector):
     object_items = [(f"o{i}", o) for i, o in enumerate(objects)]
     num_objects = len(objects)
 
-    if (len(attributes) > 0 or len(standalone_values) > 0) and len(objects) > 0: # or len(classes) > 0:
+    if (len(attributes) > 0 or len(standalone_values) > 0) and len(objects) > 0:
         object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
        
-        neutral_prompts = [f"a bad photo of {get_article(obj['name'])} {obj['name']}" for obj in objects]
-        attr_prompts = [f"a bad photo of {get_article(val)} {val} {obj['name']}"
+        neutral_prompts = [f"a blurry photo of {get_article(obj['name'])} {obj['name']}" for obj in objects]
+        attr_prompts = [f"a blurry photo of {get_article(val)} {val} {obj['name']}"
                         for obj in objects
                         for attr in attributes
                         for val in all_attributes.get(attr, [])]
-        standalone_value_prompts = [f"a bad photo of {get_article(val)} {val} {obj['name']}"
+        standalone_value_prompts = [f"a blurry photo of {get_article(val)} {val} {obj['name']}"
                                     for obj in objects
                                     for val in standalone_values]
         
@@ -161,7 +160,7 @@ def encode_scene(question, model, object_detector):
 
         scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(object1['name'])}).\n"
         for category in all_classes: 
-            if object1["name"] in all_classes[category]:
+            if sanitize_asp(object1["name"]) in all_classes[category]:
                 scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(category)}).\n"
         
         scene_encoding += f"has_attribute({oid1}, name, {sanitize_asp(object1['name'])}).\n"
@@ -228,8 +227,8 @@ def encode_scene(question, model, object_detector):
             for oid2, object2 in object_items:
                 if oid2 != oid1:
                     for rel in relations:
-                        rel_prompts.append(f"a bad photo of {get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
-                    rel_prompts.append(f"a bad photo of {get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
+                        rel_prompts.append(f"{object1['name']} {rel} {object2['name']}")
+                    rel_prompts.append(f"{object1['name']} and {object2['name']}")
 
             rel_logits_per_image = model.score(rel_bbox_crops, rel_prompts)
             

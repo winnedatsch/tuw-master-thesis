@@ -38,9 +38,20 @@ def extract_attributes(question):
              op.startswith('same') or \
              op.startswith('different'):
             attributes.add(' '.join(op.split(' ')[1:]))
-        elif op.startswith('choose') and \
-             op != 'choose rel' and operation['argument'] != '':
-            attributes.add(' '.join(op.split(' ')[1:]))
+        elif op.startswith('choose') and op != 'choose rel':
+            if operation['argument'] == '':
+                op_tokens = op.split(' ')
+                if len(op_tokens) >= 3:
+                    standalone_values.add(op_tokens[2])
+                else:
+                    token = sanitize_asp(op_tokens[1])
+                    if token.endswith('er'):
+                        token = token[:-2]
+                        if token.endswith('i'):
+                            token = token[:-1] + 'y'
+                    standalone_values.add(token)
+            else:
+                attributes.add(' '.join(op.split(' ')[1:]))
         
     return {sanitize(a) for a in attributes if a != 'name' and a != 'vposition' and a != 'hposition'}, \
            {sanitize(v) for v in standalone_values}
