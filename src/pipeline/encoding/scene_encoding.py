@@ -50,9 +50,20 @@ def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
 
 
 def prob_to_asp_weight(prob):
+    if prob == 0:
+        prob = 0.00000001
     return int(min(-1000*math.log(prob), 5000))
 
-def __should_merge__(box1, box2, overlap_threshold):
+
+def objects_overlap(oa, ob, overlap_threshold):
+    return get_object_overlap(oa, ob) > overlap_threshold
+
+def get_object_overlap(oa, ob):
+    return __get_bbox_overlap__(
+        (oa['y'], oa['x'], oa['y']+oa['h'], oa['x']+oa['w']), 
+        (ob['y'], ob['x'], ob['y']+ob['h'], ob['x']+ob['w']))
+
+def __get_bbox_overlap__(box1, box2):
         YA1, XA1, YA2, XA2 = box1 
         YB1, XB1, YB2, XB2 = box2
         box1_area = (YA2 - YA1) * (XA2 - XA1)
@@ -60,32 +71,18 @@ def __should_merge__(box1, box2, overlap_threshold):
         intersection_area = max(0, min(XA2, XB2) - max(XA1, XB1)) * max(0, min(YA2, YB2) - max(YA1, YB1))
         union_area = box1_area + box2_area - intersection_area
 
-        if intersection_area / union_area > overlap_threshold:
-            return True, (
-                min(box1[0], box2[0]),
-                min(box1[1], box2[1]),
-                max(box1[2], box2[2]),
-                max(box1[3], box2[3]),
-            )
-
-        return False, None
+        return intersection_area / union_area
 
 def merge_detected_objects(objects_a, objects_b):
     objects = [*objects_a]
     for ob in objects_b:
-        alread_present = False
+        already_present = False
         for oa in objects_a:
             categories_a = {cat for cat in all_classes if oa["name"] in all_classes[cat]}
             categories_b = {cat for cat in all_classes if ob["name"] in all_classes[cat]}
             if len(categories_a & categories_b) > 0:
-                is_merge, _ = __should_merge__(
-                        (oa['y'], oa['x'], oa['y']+oa['h'], oa['x']+oa['w']), 
-                        (ob['y'], ob['x'], ob['y']+ob['h'], ob['x']+ob['w']), 
-                        overlap_threshold=0.7
-                    )
-                if is_merge:
-                    alread_present = True
-        if not alread_present:
+                already_present = objects_overlap(oa, ob, overlap_threshold=0.7)
+        if not already_present:
             objects.append(ob)
 
     return objects
@@ -109,6 +106,9 @@ def detect_objects_question_driven(image, classes, object_detector):
         detected_objects = object_detector.detect_objects(image, all_child_classes, threshold=0.03, k=25)
         objects = merge_detected_objects(objects, detected_objects)
     return objects
+
+proximity_relations = {"on", "near", "of", "in", "in front of", "behind", "next to", "with"}
+directional_relations = {"to the left of", "to the right of", "on top of", "above", "below"}
 
 @torch.no_grad()
 def encode_scene(question, model, object_detector):
@@ -225,10 +225,13 @@ def encode_scene(question, model, object_detector):
 
         # get cosine similarities between relations and every object pair's image crop
         if len(relations) > 0 and len(objects) > 1:
+            semantic_relations = {rel for rel in relations if rel not in proximity_relations and rel not in directional_relations}
+            num_semantic_relations = len(semantic_relations)
+            
             rel_prompts = []
             for oid2, object2 in object_items:
                 if oid2 != oid1:
-                    for rel in relations:
+                    for rel in semantic_relations:
                         rel_prompts.append(f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
                     rel_prompts.append(f"{get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
 
@@ -237,21 +240,49 @@ def encode_scene(question, model, object_detector):
             m = 0
             for o2, (oid2, object2) in enumerate(object_items):
                 if oid1 != oid2:
+                    rel_appended = False
+                    # directional relations
+                    if "to the left of" in relations and (object1['x'] + object1['w']/2) < (object2['x'] + object2['w']/2):
+                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('to the left of')}, {oid2}).\n"
+                        rel_appended = True
+                    if "to the right of" in relations and (object1['x'] + object1['w']/2) > (object2['x'] + object2['w']/2):
+                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('to the right of')}, {oid2}).\n"
+                        rel_appended = True
+                    if "on top of" in relations and (object1['y'] + object1['h']/2) < (object2['y'] + object2['h']/2):
+                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('on top of')}, {oid2}).\n"
+                        rel_appended = True
+                    if "above" in relations and (object1['y'] + object1['h']/2) < (object2['y'] + object2['h']/2):
+                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('above')}, {oid2}).\n"
+                        rel_appended = True
+                    if "below" in relations and (object1['y'] + object1['h']/2) > (object2['y'] + object2['h']/2):
+                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('below')}, {oid2}).\n"
+                        rel_appended = True
+
+                    # proximity relations
+                    for proximity_rel in proximity_relations & set(relations):
+                        overlap_prob = min([2*get_object_overlap(object1, object2), 1])
+                        scene_encoding += f"{{has_relation({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})}}.\n"
+                        scene_encoding += f":~ has_relation({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2}). [{prob_to_asp_weight(overlap_prob)}, ({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})]\n"
+                        scene_encoding += f":~ not has_relation({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2}). [{prob_to_asp_weight(1-overlap_prob)}, ({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})]\n"
+                        rel_appended = True
+
+                    # semantic relations
                     rel_scores = torch.stack([
-                        rel_logits_per_image[rel_bbox_indices[o1, o2], m*(num_relations+1):m*(num_relations+1)+num_relations],
-                        rel_logits_per_image[rel_bbox_indices[o1, o2], m*(num_relations+1)+num_relations].expand(num_relations)
+                        rel_logits_per_image[rel_bbox_indices[o1, o2], m*(num_semantic_relations+1):m*(num_semantic_relations+1)+num_semantic_relations],
+                        rel_logits_per_image[rel_bbox_indices[o1, o2], m*(num_semantic_relations+1)+num_semantic_relations].expand(num_semantic_relations)
                     ])
                     rel_probs = torch.nn.functional.softmax(rel_scores, dim=0)
 
                     n = 0
-                    for rel in relations:
+                    for rel in semantic_relations:
                         scene_encoding += f"{{has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2})}}.\n"
                         scene_encoding += f":~ has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[0,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
                         scene_encoding += f":~ not has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[1,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
-
+                        rel_appended = True
                         n += 1
                     
-                    scene_encoding += "\n"
+                    if rel_appended:
+                        scene_encoding += "\n"
                     m += 1
 
                     del rel_scores, rel_probs
