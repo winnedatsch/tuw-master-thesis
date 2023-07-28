@@ -566,3 +566,4 @@ __pycache__
 
 notebooks/model_snapshots
 notebooks/runs
+notebooks/prompt_engineering_results

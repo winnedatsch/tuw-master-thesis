@@ -7,7 +7,7 @@ import pandas as pd
 def scaling(x, ceiling=3):
     return (1 - tanh(x * 2)) * ceiling
 
-def get_scaled_bbox(entry, img_height, img_width, padding_scale_ceiling=0.5):
+def get_scaled_bbox(entry, img_height, img_width, padding_scale_ceiling=1):
     padding_w = scaling(entry["bbox_w"] / img_width, padding_scale_ceiling) * entry["bbox_w"]
     padding_h = scaling(entry["bbox_h"] / img_height, padding_scale_ceiling) * entry["bbox_h"]
 
