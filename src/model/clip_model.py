@@ -2,12 +2,12 @@ from model.base_model import BaseModel
 from transformers import CLIPModel as TCLIPModel, CLIPImageProcessor, CLIPTokenizer
 
 class CLIPModel(BaseModel):
-    def __init__(self, gpu, snapshot="openai/clip-vit-base-patch32"):
+    def __init__(self, gpu, model="openai/clip-vit-base-patch32", snapshot=None):
         super().__init__(img_size=224, gpu=gpu)
 
-        self.model = TCLIPModel.from_pretrained(snapshot).to(gpu)
-        self.image_processor = CLIPImageProcessor.from_pretrained("openai/clip-vit-base-patch32")
-        self.tokenizer = CLIPTokenizer.from_pretrained("openai/clip-vit-base-patch32")
+        self.model = TCLIPModel.from_pretrained(snapshot if snapshot is not None else model).to(gpu)
+        self.image_processor = CLIPImageProcessor.from_pretrained(model)
+        self.tokenizer = CLIPTokenizer.from_pretrained(model)
 
     def preprocess_images(self, images):
         return self.image_processor(images, return_tensors="pt", do_resize=False, do_center_crop=False).to(self.gpu)

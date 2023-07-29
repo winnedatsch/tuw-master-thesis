@@ -106,7 +106,7 @@ def detect_objects_question_driven(image, classes, object_detector):
         objects = merge_detected_objects(objects, detected_objects)
 
     if classes["all"]:
-        detected_objects = object_detector.detect_objects(image, all_child_classes, threshold=0.03, k=20)
+        detected_objects = object_detector.detect_objects(image, all_child_classes, threshold=0.03, k=25)
         objects = merge_detected_objects(objects, detected_objects)
     return objects
 
@@ -122,10 +122,12 @@ def encode_scene(question, model, object_detector):
     num_relations = len(relations)
 
     for attr in attributes:
+        scene_encoding += f"is_attr({cleanup_whitespace(attr)}).\n"
         for val in all_attributes.get(attr, []):
-            scene_encoding += f"is_attribute_value({cleanup_whitespace(attr)}, {cleanup_whitespace(val)}).\n"
+            scene_encoding += f"is_attr_value({cleanup_whitespace(attr)}, {cleanup_whitespace(val)}).\n"
         scene_encoding += "\n"
 
+    scene_encoding += "\n"
 
     image = read_image(f"../data/images/{question['imageId']}.jpg", ImageReadMode.RGB)
     image_size = {'w': image.shape[2], 'h': image.shape[1]}
@@ -138,12 +140,12 @@ def encode_scene(question, model, object_detector):
         object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, model)
        
-        neutral_prompts = [f"a blurry photo of {get_article(obj['name'])} {obj['name']}" for obj in objects]
-        attr_prompts = [f"a blurry photo of {get_article(val)} {val} {obj['name']}"
+        neutral_prompts = [f"a pixelated picture of {get_article(obj['name'])} {obj['name']}" for obj in objects]
+        attr_prompts = [f"a pixelated picture of {get_article(val)} {val} {obj['name']}"
                         for obj in objects
                         for attr in attributes
                         for val in all_attributes.get(attr, [])]
-        standalone_value_prompts = [f"a blurry photo of {get_article(val)} {val} {obj['name']}"
+        standalone_value_prompts = [f"a pixelated picture of {get_article(val)} {val} {obj['name']}"
                                     for obj in objects
                                     for val in standalone_values]
         
@@ -156,28 +158,28 @@ def encode_scene(question, model, object_detector):
     # add attributes derived from object detection (names, vposition/hposition)
     for o1, (oid1, object1) in enumerate(object_items):
         scene_encoding += f"object({oid1}).\n"
-        scene_encoding += f"has_object_weight({oid1}, {prob_to_asp_weight(object1['score'])}).\n"
+        scene_encoding += f"has_obj_weight({oid1}, {prob_to_asp_weight(object1['score'])}).\n"
 
-        scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(object1['name'])}).\n"
+        scene_encoding += f"has_attr({oid1}, class, {sanitize_asp(object1['name'])}).\n"
         for category in all_classes: 
             if sanitize_asp(object1["name"]) in all_classes[category]:
-                scene_encoding += f"has_attribute({oid1}, class, {sanitize_asp(category)}).\n"
+                scene_encoding += f"has_attr({oid1}, class, {sanitize_asp(category)}).\n"
         
-        scene_encoding += f"has_attribute({oid1}, name, {sanitize_asp(object1['name'])}).\n"
+        scene_encoding += f"has_attr({oid1}, name, {sanitize_asp(object1['name'])}).\n"
 
         if (object1['x'] + object1['w']/2) > image_size["w"]/3*2:
-            scene_encoding += f"has_attribute({oid1}, hposition, right).\n"
+            scene_encoding += f"has_attr({oid1}, hposition, right).\n"
         elif (object1['x'] + object1['w']/2) > image_size["w"]/3:
-            scene_encoding += f"has_attribute({oid1}, hposition, middle).\n"
+            scene_encoding += f"has_attr({oid1}, hposition, middle).\n"
         else:
-            scene_encoding += f"has_attribute({oid1}, hposition, left).\n"
+            scene_encoding += f"has_attr({oid1}, hposition, left).\n"
 
         if (object1['y'] + object1['h']/2) > image_size["h"]/3*2:
-            scene_encoding += f"has_attribute({oid1}, vposition, bottom).\n"
+            scene_encoding += f"has_attr({oid1}, vposition, bottom).\n"
         elif (object1['y'] + object1['h']/2) > image_size["h"]/3:
-            scene_encoding += f"has_attribute({oid1}, vposition, middle).\n"
+            scene_encoding += f"has_attr({oid1}, vposition, middle).\n"
         else:
-            scene_encoding += f"has_attribute({oid1}, vposition, top).\n"
+            scene_encoding += f"has_attr({oid1}, vposition, top).\n"
         scene_encoding += "\n"
 
         neutral_indices = num_objects
@@ -193,9 +195,9 @@ def encode_scene(question, model, object_detector):
             j = 0
             for attr in attributes:
                 for val in all_attributes.get(attr, []): 
-                    scene_encoding += f"{{has_attribute({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)})}}.\n"
-                    scene_encoding += f":~ has_attribute({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)}). [{prob_to_asp_weight(attr_probs[0,j])}, ({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)})]\n"
-                    scene_encoding += f":~ not has_attribute({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)}). [{prob_to_asp_weight(attr_probs[1,j])}, ({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)})]\n"
+                    scene_encoding += f"{{has_attr({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)})}}.\n"
+                    scene_encoding += f":~ has_attr({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)}). [{prob_to_asp_weight(attr_probs[0,j])}, ({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)})]\n"
+                    scene_encoding += f":~ not has_attr({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)}). [{prob_to_asp_weight(attr_probs[1,j])}, ({oid1}, {cleanup_whitespace(attr)}, {cleanup_whitespace(val)})]\n"
                     j += 1
                 
             scene_encoding += "\n"
@@ -214,9 +216,9 @@ def encode_scene(question, model, object_detector):
 
             k = 0
             for standalone_value_ in standalone_values:
-                scene_encoding += f"{{has_attribute({oid1}, any, {cleanup_whitespace(standalone_value_)})}}.\n"
-                scene_encoding += f":~ has_attribute({oid1}, any, {cleanup_whitespace(standalone_value_)}). [{prob_to_asp_weight(standalone_probs[0,k])}, ({oid1}, any, {cleanup_whitespace(standalone_value_)})]\n"
-                scene_encoding += f":~ not has_attribute({oid1}, any, {cleanup_whitespace(standalone_value_)}). [{prob_to_asp_weight(standalone_probs[1,k])}, ({oid1}, any, {cleanup_whitespace(standalone_value_)})]\n"
+                scene_encoding += f"{{has_attr({oid1}, any, {cleanup_whitespace(standalone_value_)})}}.\n"
+                scene_encoding += f":~ has_attr({oid1}, any, {cleanup_whitespace(standalone_value_)}). [{prob_to_asp_weight(standalone_probs[0,k])}, ({oid1}, any, {cleanup_whitespace(standalone_value_)})]\n"
+                scene_encoding += f":~ not has_attr({oid1}, any, {cleanup_whitespace(standalone_value_)}). [{prob_to_asp_weight(standalone_probs[1,k])}, ({oid1}, any, {cleanup_whitespace(standalone_value_)})]\n"
                 k += 1
 
             del standalone_scores, standalone_probs
@@ -227,8 +229,8 @@ def encode_scene(question, model, object_detector):
             for oid2, object2 in object_items:
                 if oid2 != oid1:
                     for rel in relations:
-                        rel_prompts.append(f"{object1['name']} {rel} {object2['name']}")
-                    rel_prompts.append(f"{object1['name']} and {object2['name']}")
+                        rel_prompts.append(f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
+                    rel_prompts.append(f"{get_article(object1['name'])} {object1['name']} and {get_article(object2['name'])} {object2['name']}")
 
             rel_logits_per_image = model.score(rel_bbox_crops, rel_prompts)
             
@@ -243,9 +245,9 @@ def encode_scene(question, model, object_detector):
 
                     n = 0
                     for rel in relations:
-                        scene_encoding += f"{{has_relation({oid1}, {cleanup_whitespace(rel)}, {oid2})}}.\n"
-                        scene_encoding += f":~ has_relation({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[0,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
-                        scene_encoding += f":~ not has_relation({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[1,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
+                        scene_encoding += f"{{has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2})}}.\n"
+                        scene_encoding += f":~ has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[0,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
+                        scene_encoding += f":~ not has_rel({oid1}, {cleanup_whitespace(rel)}, {oid2}). [{prob_to_asp_weight(rel_probs[1,n])}, ({oid1}, {cleanup_whitespace(rel)}, {oid2})]\n"
 
                         n += 1
                     

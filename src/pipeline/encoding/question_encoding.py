@@ -30,7 +30,7 @@ def encode_question(question):
 
         elif operation['operation'] == 'query':
             question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
-            question_encoding += f"query_attr({i+step_padding+1}, {i+step_padding}, {operation['argument']}).\n"
+            question_encoding += f"query({i+step_padding+1}, {i+step_padding}, {operation['argument']}).\n"
             step_padding += 1
 
         elif operation['operation'] == 'exist':
@@ -43,7 +43,10 @@ def encode_question(question):
             question_encoding += f"or({i+step_padding}, {dependencies[0]}, {dependencies[1]}).\n"
 
         elif operation['operation'] == 'common':
-            question_encoding += f"common({i+step_padding}, {dependencies[0]}, {dependencies[1]}).\n"
+            question_encoding += f"unique({i+step_padding}, {dependencies[0]}).\n"
+            question_encoding += f"unique({i+step_padding+1}, {dependencies[1]}).\n"
+            question_encoding += f"common({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}).\n"
+            step_padding += 2
 
         elif operation['operation'] == 'filter':
             if operation['argument'].startswith('not('):
@@ -136,7 +139,8 @@ def encode_question(question):
                             token = token[:-1] + 'y'
 
                     question_encoding += f"compare({i+step_padding+2}, {i+step_padding}, {i+step_padding+1}, {token}, true).\n"
-                step_padding += 2
+                    question_encoding += f"query({i+step_padding+3}, {i+step_padding+2}, name).\n"
+                step_padding += 3
             else:
                 attr = sanitize_asp(' '.join(operation['operation'].split(' ')[1:]))
                 option0 = sanitize_asp(operation['argument'].split('|')[0])

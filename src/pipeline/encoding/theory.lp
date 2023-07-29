@@ -1,176 +1,174 @@
-
-% idea: scene objects encoded like:
-% object(ID)
-% has_attribute(ID, class, car)
-% has_attribute(ID, color, red)
-% has_attribute(ID, size, large)
-% has_attribute(ID, any, full)
-% has_relation(ID, in, ID')
-% has_relation(ID, in_front_of, ID'')
-
-#defined has_attribute/3.
-#defined has_relation/3.
-#defined is_attribute_value/2.
+% ========== Scene Graph Definitions ==========
+#defined has_attr/3.
+#defined has_rel/3.
+#defined is_attr/1.
+#defined is_attr_value/2.
 #defined object/1.
-#defined has_object_weight/2.
+#defined has_obj_weight/2.
 
-% ------- Rules for operations -------
-% scene
+% ========== Base Operations ==========
+% ---------- scene ----------
 #defined scene/1.
 
-state(T,ID) :- scene(T), object(ID).
+state(TO,ID) :- scene(TO), object(ID).
 
-% and
-#defined and/3.
+% ---------- end ----------
+#defined end/1.
 
-bool(T,yes) :- and(T, RT0, RT1), bool(RT0,yes), bool(RT1,yes).
-bool(T,no) :- and(T, RT0, RT1), not bool(T,yes).
+ans(V) :- end(TO), attr_value(TO,V).
+ans(V) :- end(TO), attr(TO,V).
+ans(V) :- end(TO), rel(TO,V).
+ans(V) :- end(TO), bool(TO,V).
 
-% or
-#defined or/3.
+% ---------- ans ----------
+% At least one answer must be derivable
+:- not ans(_).
+#show ans/1.
 
-bool(T,yes) :- or(T, RT0, RT1), bool(RT0,yes).
-bool(T,yes) :- or(T, RT0, RT1), bool(RT1,yes).
-bool(T,no) :- or(T, RT0, RT1), not bool(T,yes).
 
-% choose_attr
-#defined choose_attr/5.
-1 {has_attribute(ID, ATTR, VALUE); has_attribute(ID, ATTR, VALUE')} 1:- choose_attr(T, RT, ATTR, VALUE, VALUE'), state(RT, ID).
-attr_value(T, VALUE) :- choose_attr(T, RT, ATTR, VALUE, VALUE'), state(RT, ID), has_attribute(ID, ATTR, VALUE).
-attr_value(T, VALUE') :- choose_attr(T, RT, ATTR, VALUE, VALUE'), state(RT, ID), has_attribute(ID, ATTR, VALUE').
+% ========== Intermediary Operations ==========
+% ---------- select ----------
+#defined select/3.
 
-% choose_rel
-#defined choose_rel/6.
-1 {has_relation(ID', REL, ID): object(ID'); has_relation(ID', REL', ID): object(ID')} 1 :- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS).
-rel(T, REL) :- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID', REL, ID).
-rel(T, REL') :- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID', REL', ID).
+state(TO,ID) :- select(TO, TI, CLASS), state(TI, ID), has_attr(ID, class, CLASS).
 
-1 {has_relation(ID, REL, ID'): object(ID'); has_relation(ID, REL', ID'): object(ID')} 1:- choose_rel(T, RT, CLASS, REL, REL', subject), state(RT, ID), has_attribute(ID', class, CLASS).
-rel(T, REL) :- choose_rel(T, RT, CLASS, REL, REL', object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL, ID').
-rel(T, REL') :- choose_rel(T, RT, CLASS, REL, REL', object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL', ID').
-
-% compare
-#defined compare/5.
-
-state(T,ID) :- compare(T, RT0, RT1, VALUE, true), state(RT0, ID), state(RT1, ID'), has_attribute(ID, _, VALUE), not has_attribute(ID', _, VALUE).
-state(T,ID') :- compare(T, RT0, RT1, VALUE, true), state(RT0, ID), state(RT1, ID'), not has_attribute(ID, _, VALUE), has_attribute(ID', _, VALUE).
-
-state(T,ID') :- compare(T, RT0, RT1, VALUE, false), state(RT0, ID), state(RT1, ID'), has_attribute(ID, _, VALUE), not has_attribute(ID', _, VALUE).
-state(T,ID) :- compare(T, RT0, RT1, VALUE, false), state(RT0, ID), state(RT1, ID'), not has_attribute(ID, _, VALUE), has_attribute(ID', _, VALUE).
-
-% common
-#defined common/3.
-
-attr(T, ATTR) :- common(T, RT0, RT1), state(RT0, ID), state(RT1, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE'), VALUE == VALUE'.
-
-% exist
-#defined exist/2.
-
-bool(T,yes) :- exist(T, RT), state(RT,ID).
-bool(T,no) :- exist(T, RT), not bool(T,yes).
-
-% filter
+% ---------- filter ----------
 #defined filter/4.
 
-state(T,ID) :- filter(T, RT, ATTR, VALUE), state(RT, ID), has_attribute(ID, ATTR, VALUE).
+state(TO,ID) :- filter(TO, TI, ATTR, VALUE), state(TI, ID), has_attr(ID, ATTR, VALUE).
 
 #defined filter_any/3.
 
-state(T,ID) :- filter_any(T, RT, VALUE), state(RT, ID), has_attribute(ID, ATTR, VALUE).
+state(TO,ID) :- filter_any(TO, TI, VALUE), state(TI, ID), has_attr(ID, ATTR, VALUE).
 
-% negate
-#defined negate/3.
-state(T, ID) :- negate(T, RT, SRT), state(SRT, ID), not state(RT, ID).
-
-% query_attr
-#defined query_attr/3.
-
-1 { has_attribute(ID, ATTR, VALUE) : is_attribute_value(ATTR, VALUE)} 1 :- query_attr(T, RT, ATTR), state(RT, ID), ATTR != name, ATTR != class, ATTR != hposition, ATTR != vposition.
-attr_value(T,VALUE) :- query_attr(T, RT, ATTR), state(RT, ID), has_attribute(ID, ATTR, VALUE).
-
-% relate
+% ---------- relate ----------
 #defined relate/5.
 
-state(T, ID') :- relate(T, RT, CLASS, REL, subject), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID', REL, ID).
-
-
-state(T, ID') :- relate(T, RT, CLASS, REL, object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL, ID').
+state(TO, ID') :- relate(TO, TI, CLASS, REL, subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL, ID).
+state(TO, ID') :- relate(TO, TI, CLASS, REL, object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL, ID').
 
 % relate_any
 #defined relate_any/4.
 
-state(T, ID') :- relate_any(T, RT, REL, subject), state(RT, ID), has_relation(ID', REL, ID).
-
-state(T, ID') :- relate_any(T, RT, REL, object), state(RT, ID), has_relation(ID, REL, ID').
+state(TO, ID') :- relate_any(TO, TI, REL, subject), state(TI, ID), has_rel(ID', REL, ID).
+state(TO, ID') :- relate_any(TO, TI, REL, object), state(TI, ID), has_rel(ID, REL, ID').
 
 % relate_attr
 #defined relate_attr/4.
 
-state(T, ID') :- relate_attr(T, RT, CLASS, ATTR), state(RT, ID), has_attribute(ID, ATTR, VALUE), has_attribute(ID', class, CLASS), has_attribute(ID', ATTR, VALUE'), VALUE==VALUE', ID!=ID'.
+state(TO, ID') :- relate_attr(TO, TI, CLASS, ATTR), state(TI, ID), has_attr(ID, ATTR, VALUE), has_attr(ID', class, CLASS), has_attr(ID', ATTR, VALUE'), VALUE==VALUE', ID!=ID'.
 
 
-% select
-#defined select/3.
+% ========== Terminal Operations ==========
+% ---------- query ----------
+#defined query/3.
 
-state(T,ID) :- select(T, RT, CLASS), state(RT, ID), has_attribute(ID, class, CLASS).
+{ has_attr(ID, ATTR, VALUE) : is_attr_value(ATTR, VALUE)} = 1 :- query(TO, TI, ATTR), state(TI, ID), ATTR != name, ATTR != class, ATTR != hposition, ATTR != vposition.
+attr_value(TO,VALUE) :- query(TO, TI, ATTR), state(TI, ID), has_attr(ID, ATTR, VALUE).
 
-% two_different
-#defined two_different/4.
-
-bool(T, yes) :- two_different(T, RT0, RT1, ATTR), state(RT0, ID), state(RT1, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE'), VALUE != VALUE'.
-bool(T, yes) :- two_different(T, RT0, RT1, ATTR), state(RT0, ID), state(RT1, ID'), has_attribute(ID, ATTR, _), not has_attribute(ID', ATTR, _).
-bool(T, yes) :- two_different(T, RT0, RT1, ATTR), state(RT0, ID), state(RT1, ID'), not has_attribute(ID, ATTR, _), has_attribute(ID', ATTR, _).
-bool(T,no) :- two_different(T, RT0, RT1, ATTR), not bool(T,yes).
-
-% two_same
-#defined two_same/4.
-
-bool(T, yes) :- two_same(T, RT0, RT1, ATTR), state(RT0, ID), state(RT1, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE'), VALUE == VALUE'.
-bool(T,no) :- two_same(T, RT0, RT1, ATTR), not bool(T,yes).
-
-% all_different
-#defined all_different/3.
-
-bool(T,no) :- all_different(T, RT, ATTR), state(RT, ID), state(RT, ID'), has_attribute(ID, ATTR, VALUE), has_attribute(ID', ATTR, VALUE).
-bool(T,yes) :- all_different(T, RT, ATTR), not bool(T,no).
-
-% all_same
-#defined all_same/3.
-
-bool(T,no) :- all_same(T, RT, ATTR), state(RT, ID), state(RT, ID'), has_attribute(ID, ATTR, VALUE), not has_attribute(ID', ATTR, VALUE).
-bool(T,yes) :- all_same(T, RT, ATTR), not bool(T,no).
-
-% unique
-#defined unique/2.
-
-1 {state(T,ID): state(RT,ID)} 1 :- unique(T, RT).
-:~ unique(T, RT), state(T,ID), has_object_weight(ID, P). [P, (T, ID)]
-
+% ---------- verify ----------
 % verify_attr
 #defined verify_attr/4.
 
-bool(T, yes) :- verify_attr(T, RT, ATTR, VALUE), state(RT, ID), has_attribute(ID, ATTR, VALUE).
-bool(T,no) :- verify_attr(T, RT, ATTR, VALUE), not bool(T,yes).
+bool(TO, yes) :- verify_attr(TO, TI, ATTR, VALUE), state(TI, ID), has_attr(ID, ATTR, VALUE).
+bool(TO,no) :- verify_attr(TO, TI, ATTR, VALUE), not bool(TO,yes).
 
 % verify_rel
 #defined verify_rel/5.
 
-bool(T, yes) :- verify_rel(T, RT, CLASS, REL, subject), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID', REL, ID).
-bool(T,no) :- verify_rel(T, RT, CLASS, REL, subject), not bool(T,yes).
+bool(TO, yes) :- verify_rel(TO, TI, CLASS, REL, subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL, ID).
+bool(TO,no) :- verify_rel(TO, TI, CLASS, REL, subject), not bool(TO,yes).
 
-bool(T, yes) :- verify_rel(T, RT, CLASS, REL, object), state(RT, ID), has_attribute(ID', class, CLASS), has_relation(ID, REL, ID').
-bool(T,no) :- verify_rel(T, RT, CLASS, REL, object), not bool(T,yes).
+bool(TO, yes) :- verify_rel(TO, TI, CLASS, REL, object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL, ID').
+bool(TO,no) :- verify_rel(TO, TI, CLASS, REL, object), not bool(TO,yes).
+
+% ---------- choose ----------
+% choose_attr
+#defined choose_attr/5.
+{has_attr(ID, ATTR, VALUE); has_attr(ID, ATTR, VALUE')} = 1 :- choose_attr(TO, TI, ATTR, VALUE, VALUE'), state(TI, ID).
+attr_value(TO, VALUE) :- choose_attr(TO, TI, ATTR, VALUE, VALUE'), state(TI, ID), has_attr(ID, ATTR, VALUE).
+attr_value(TO, VALUE') :- choose_attr(TO, TI, ATTR, VALUE, VALUE'), state(TI, ID), has_attr(ID, ATTR, VALUE').
+
+% choose_rel
+#defined choose_rel/6.
+{has_rel(ID', REL, ID): has_attr(ID', class, CLASS); has_rel(ID', REL', ID): has_attr(ID', class, CLASS)} = 1 :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID).
+rel(TO, REL) :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL, ID).
+rel(TO, REL') :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL', ID).
+
+{has_rel(ID, REL, ID'): has_attr(ID', class, CLASS); has_rel(ID, REL', ID'): has_attr(ID', class, CLASS)} = 1 :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID).
+rel(TO, REL) :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL, ID').
+rel(TO, REL') :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL', ID').
+
+% ---------- exist ----------
+#defined exist/2.
+
+bool(TO,yes) :- exist(TO, TI), state(TI,ID).
+bool(TO,no) :- exist(TO, TI), not bool(TO,yes).
+
+% ---------- different/same ----------
+% all_different
+#defined all_different/3.
+
+bool(TO,no) :- all_different(TO, TI, ATTR), state(TI, ID), state(TI, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE).
+bool(TO,yes) :- all_different(TO, TI, ATTR), not bool(TO,no).
+
+% all_same
+#defined all_same/3.
+
+bool(TO,no) :- all_same(TO, TI, ATTR), state(TI, ID), state(TI, ID'), has_attr(ID, ATTR, VALUE), not has_attr(ID', ATTR, VALUE).
+bool(TO,yes) :- all_same(TO, TI, ATTR), not bool(TO,no).
+
+% two_different
+#defined two_different/4.
+
+bool(TO, yes) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE'), VALUE != VALUE'.
+bool(TO, yes) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, _), not has_attr(ID', ATTR, _).
+bool(TO, yes) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), not has_attr(ID, ATTR, _), has_attr(ID', ATTR, _).
+bool(TO,no) :- two_different(TO, TI0, TI1, ATTR), not bool(TO,yes).
+
+% two_same
+#defined two_same/4.
+
+bool(TO, yes) :- two_same(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE'), VALUE == VALUE'.
+bool(TO,no) :- two_same(TO, TI0, TI1, ATTR), not bool(TO,yes).
+
+% ---------- common ----------
+#defined common/3.
+
+attr(TO, ATTR) :- common(TO, TI0, TI1), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE), ATTR != name, ATTR != class, ATTR != hposition, ATTR != vposition.
+{attr(TO, ATTR): is_attr(ATTR)} = 1 :- common(TO, TI0, TI1).
+
+% ---------- compare ----------
+#defined compare/5.
+
+state(TO,ID) :- compare(TO, TI0, TI1, VALUE, true), state(TI0, ID), state(TI1, ID'), has_attr(ID, _, VALUE), not has_attr(ID', _, VALUE).
+state(TO,ID') :- compare(TO, TI0, TI1, VALUE, true), state(TI0, ID), state(TI1, ID'), not has_attr(ID, _, VALUE), has_attr(ID', _, VALUE).
+
+state(TO,ID') :- compare(TO, TI0, TI1, VALUE, false), state(TI0, ID), state(TI1, ID'), has_attr(ID, _, VALUE), not has_attr(ID', _, VALUE).
+state(TO,ID) :- compare(TO, TI0, TI1, VALUE, false), state(TI0, ID), state(TI1, ID'), not has_attr(ID, _, VALUE), has_attr(ID', _, VALUE).
 
 
-% Derive answer (T must equal the last point in time)
-#defined end/1.
+% ========== Utility Operations ==========
+% ---------- boolean ----------
+% and
+#defined and/3.
 
-ans(V) :- end(T), attr_value(T,V).
-ans(V) :- end(T), attr(T,V).
-ans(V) :- end(T), rel(T,V).
-ans(V) :- end(T), bool(T,V).
+bool(TO,yes) :- and(TO, TI0, TI1), bool(TI0,yes), bool(TI1,yes).
+bool(TO,no) :- and(TO, TI0, TI1), not bool(TO,yes).
 
-:- not ans(_).
+% or
+#defined or/3.
 
-#show ans/1.
-% #show state/2.
+bool(TO,yes) :- or(TO, TI0, TI1), bool(TI0,yes).
+bool(TO,yes) :- or(TO, TI0, TI1), bool(TI1,yes).
+bool(TO,no) :- or(TO, TI0, TI1), not bool(TO,yes).
+
+% ---------- unique ----------
+#defined unique/2.
+
+{state(TO,ID): state(TI,ID)} = 1 :- unique(TO, TI).
+:~ unique(TO, TI), state(TO,ID), has_obj_weight(ID, P). [P, (TO, ID)]
+
+% ---------- negate ----------
+#defined negate/3.
+state(TO, ID) :- negate(TO, TI0, TI1), state(TI1, ID), not state(TI0, ID).
