@@ -54,7 +54,6 @@ def prob_to_asp_weight(prob):
         prob = 0.00000001
     return int(min(-1000*math.log(prob), 5000))
 
-
 def objects_overlap(oa, ob, overlap_threshold):
     return get_object_overlap(oa, ob) > overlap_threshold
 
@@ -243,27 +242,30 @@ def encode_scene(question, model, object_detector):
                     rel_appended = False
                     # directional relations
                     if "to the left of" in relations and (object1['x'] + object1['w']/2) < (object2['x'] + object2['w']/2):
-                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('to the left of')}, {oid2}).\n"
+                        scene_encoding += f"has_rel({oid1}, {cleanup_whitespace('to the left of')}, {oid2}).\n"
                         rel_appended = True
                     if "to the right of" in relations and (object1['x'] + object1['w']/2) > (object2['x'] + object2['w']/2):
-                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('to the right of')}, {oid2}).\n"
+                        scene_encoding += f"has_rel({oid1}, {cleanup_whitespace('to the right of')}, {oid2}).\n"
                         rel_appended = True
                     if "on top of" in relations and (object1['y'] + object1['h']/2) < (object2['y'] + object2['h']/2):
-                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('on top of')}, {oid2}).\n"
+                        scene_encoding += f"has_rel({oid1}, {cleanup_whitespace('on top of')}, {oid2}).\n"
                         rel_appended = True
                     if "above" in relations and (object1['y'] + object1['h']/2) < (object2['y'] + object2['h']/2):
-                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('above')}, {oid2}).\n"
+                        scene_encoding += f"has_rel({oid1}, {cleanup_whitespace('above')}, {oid2}).\n"
                         rel_appended = True
                     if "below" in relations and (object1['y'] + object1['h']/2) > (object2['y'] + object2['h']/2):
-                        scene_encoding += f"has_relation({oid1}, {cleanup_whitespace('below')}, {oid2}).\n"
+                        scene_encoding += f"has_rel({oid1}, {cleanup_whitespace('below')}, {oid2}).\n"
                         rel_appended = True
 
                     # proximity relations
                     for proximity_rel in proximity_relations & set(relations):
-                        overlap_prob = min([2*get_object_overlap(object1, object2), 1])
-                        scene_encoding += f"{{has_relation({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})}}.\n"
-                        scene_encoding += f":~ has_relation({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2}). [{prob_to_asp_weight(overlap_prob)}, ({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})]\n"
-                        scene_encoding += f":~ not has_relation({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2}). [{prob_to_asp_weight(1-overlap_prob)}, ({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})]\n"
+                        object1_center = {'x': object1['x'] + object1['w']/2, 'y': object1['y'] + object1['h']/2}
+                        object2_center = {'x': object2['x'] + object2['w']/2, 'y': object2['y'] + object2['h']/2}
+                        l2_distance = math.sqrt(abs(object1_center['x'] - object2_center['x'])**2 + abs(object1_center['y'] - object2_center['y'])**2)
+                        proximity_prob = 1 - (l2_distance/math.sqrt(image_size["w"]**2 + image_size["h"]**2))
+                        scene_encoding += f"{{has_rel({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})}}.\n"
+                        scene_encoding += f":~ has_rel({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2}). [{prob_to_asp_weight(proximity_prob)}, ({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})]\n"
+                        scene_encoding += f":~ not has_rel({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2}). [{prob_to_asp_weight(1-proximity_prob)}, ({oid1}, {cleanup_whitespace(proximity_rel)}, {oid2})]\n"
                         rel_appended = True
 
                     # semantic relations

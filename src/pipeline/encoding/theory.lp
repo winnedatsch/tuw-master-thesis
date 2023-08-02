@@ -17,7 +17,7 @@ state(TO,ID) :- scene(TO), object(ID).
 
 ans(V) :- end(TO), attr_value(TO,V).
 ans(V) :- end(TO), attr(TO,V).
-ans(V) :- end(TO), rel(TO,V).
+ans(V) :- end(TO), rel(TO,_,V).
 ans(V) :- end(TO), bool(TO,V).
 
 % ---------- ans ----------
@@ -91,13 +91,19 @@ attr_value(TO, VALUE') :- choose_attr(TO, TI, ATTR, VALUE, VALUE'), state(TI, ID
 
 % choose_rel
 #defined choose_rel/6.
-{has_rel(ID', REL, ID): has_attr(ID', class, CLASS); has_rel(ID', REL', ID): has_attr(ID', class, CLASS)} = 1 :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID).
-rel(TO, REL) :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL, ID).
-rel(TO, REL') :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL', ID).
 
-{has_rel(ID, REL, ID'): has_attr(ID', class, CLASS); has_rel(ID, REL', ID'): has_attr(ID', class, CLASS)} = 1 :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID).
-rel(TO, REL) :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL, ID').
-rel(TO, REL') :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL', ID').
+{rel(TO, ID', REL)} :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL, ID).
+:~ choose_rel(TO, TI, CLASS, REL, REL', subject), rel(TO, ID', REL), has_obj_weight(ID', P). [P, (TO, ID', REL)]
+{rel(TO, ID', REL')} :- choose_rel(TO, TI, CLASS, REL, REL', subject), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID', REL', ID).
+:~ choose_rel(TO, TI, CLASS, REL, REL', subject), rel(TO, ID', REL'), has_obj_weight(ID', P). [P, (TO, ID', REL')]
+{rel(TO, ID, REL) : object(ID); rel(TO, ID, REL'): object(ID)} = 1 :- choose_rel(TO, TI, CLASS, REL, REL', subject).
+
+{rel(TO, ID', REL)} :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL, ID').
+:~ choose_rel(TO, TI, CLASS, REL, REL', object), rel(TO, ID', REL), has_obj_weight(ID', P). [P, (TO, ID', REL)]
+{rel(TO, ID', REL')} :- choose_rel(TO, TI, CLASS, REL, REL', object), state(TI, ID), has_attr(ID', class, CLASS), has_rel(ID, REL', ID').
+:~ choose_rel(TO, TI, CLASS, REL, REL', object), rel(TO, ID', REL), has_obj_weight(ID', P). [P, (TO, ID', REL)]
+{rel(TO, ID, REL) : object(ID); rel(TO, ID, REL'): object(ID)} = 1 :- choose_rel(TO, TI, CLASS, REL, REL', object).
+
 
 % ---------- exist ----------
 #defined exist/2.
