@@ -1,14 +1,13 @@
 
 from model.language_model import LanguageModel
-from transformers import OPTForCausalLM, AutoTokenizer
+from transformers import GPT2LMHeadModel, AutoTokenizer
 from perplexity import perplexity
 
-
-class OPTModel(LanguageModel):
+class GPT2Model(LanguageModel):
     def __init__(self, gpu):
         self.gpu = gpu
-        self.tokenizer = AutoTokenizer.from_pretrained("facebook/opt-1.3b")
-        self.model = OPTForCausalLM.from_pretrained("facebook/opt-1.3b").to(gpu)
+        self.tokenizer = AutoTokenizer.from_pretrained("gpt2-medium")
+        self.model = GPT2LMHeadModel.from_pretrained("gpt2-medium").to(gpu)
 
 
     def score(self, texts):

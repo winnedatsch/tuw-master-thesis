@@ -12,6 +12,7 @@ import json
 import itertools
 import random
 
+random.seed(42)
 
 with open('../data/metadata/gqa_all_attribute.json') as f:
     all_attributes = json.load(f)
@@ -19,6 +20,10 @@ with open('../data/metadata/gqa_all_attribute.json') as f:
 with open('../data/metadata/gqa_all_class.json') as f:
     all_classes = json.load(f)
     all_child_classes = [c.replace("_", " ") for c in itertools.chain(*all_classes.values())]
+
+with open('../data/metadata/gqa_relation.json') as f:
+    all_relations = json.load(f)
+    sample_relations = random.choices(all_relations, k=25)
 
 
 def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
@@ -115,7 +120,7 @@ def detect_objects_question_driven(image, classes, object_detector):
     return objects
 
 @torch.no_grad()
-def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: ObjectDetector, llm_model: LanguageModel, llm_model_mean_perplexity):
+def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: ObjectDetector, llm_model: LanguageModel):
     scene_encoding = ""
     
     attributes, standalone_values = extract_attributes(question)
@@ -144,12 +149,12 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
         object_bboxes = get_object_bboxes(objects, image_size)
         obj_bbox_crops = bboxes_to_image_crops(object_bboxes, image, vlm_model)
        
-        neutral_prompts = [f"a pixelated picture of {get_article(obj['name'])} {obj['name']}" for obj in objects]
-        attr_prompts = [f"a pixelated picture of {get_article(val)} {val} {obj['name']}"
+        neutral_prompts = [f"a blurry photo of {get_article(obj['name'])} {obj['name']}" for obj in objects]
+        attr_prompts = [f"a blurry photo of {get_article(val)} {val} {obj['name']}"
                         for obj in objects
                         for attr in attributes
                         for val in all_attributes.get(attr, [])]
-        standalone_value_prompts = [f"a pixelated picture of {get_article(val)} {val} {obj['name']}"
+        standalone_value_prompts = [f"a blurry photo of {get_article(val)} {val} {obj['name']}"
                                     for obj in objects
                                     for val in standalone_values]
         
@@ -158,6 +163,15 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
     if len(relations) > 0 and len(objects) > 1:
         rel_bboxes, rel_bbox_indices = get_pair_bboxes(objects, merge_threshold=0.6)
         rel_bbox_crops = bboxes_to_image_crops(rel_bboxes, image, vlm_model)
+
+        rel_reference_main_perplexity_llm = {}
+        for object1 in objects:
+            for object2 in objects:
+                if object1['name'] not in rel_reference_main_perplexity_llm:
+                    rel_reference_main_perplexity_llm[object1['name']] = {}
+                if object2['name'] not in rel_reference_main_perplexity_llm[object1['name']]:
+                    rel_samples = [f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}" for rel in sample_relations]
+                    rel_reference_main_perplexity_llm[object1['name']][object2['name']] = llm_model.score(rel_samples)['mean_perplexity']
     
     # add attributes derived from object detection (names, vposition/hposition)
     for o1, (oid1, object1) in enumerate(object_items):
@@ -227,7 +241,6 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
 
             del standalone_scores, standalone_probs
 
-        # get cosine similarities between relations and every object pair's image crop
         llm_softmax_temperature = 1000
         llm_weight = 0.5
 
@@ -236,8 +249,6 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
             rel_prompts_llm = []
             for oid2, object2 in object_items:
                 if oid2 != oid1:
-                    object1_article = 'an' if any(object1['name'].startswith(v) for v in ['a', 'e', 'i', 'o', 'u']) else 'a'
-                    object2_article = 'an' if any(object2['name'].startswith(v) for v in ['a', 'e', 'i', 'o', 'u']) else 'a'
                     for rel in relations:
                         rel_prompts_vlm.append(f"{object1['name']} {rel} {object2['name']}")
                         rel_prompts_llm.append(f"{get_article(object1['name'])} {object1['name']} {rel} {get_article(object2['name'])} {object2['name']}")
@@ -259,7 +270,7 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
 
                     rel_scores_llm = torch.stack([
                         rel_perplexity[m*(num_relations):(m+1)*(num_relations)],
-                        torch.tensor([llm_model_mean_perplexity]).expand(num_relations)
+                        torch.tensor([rel_reference_main_perplexity_llm[object1['name']][object2['name']]]).expand(num_relations)
                     ])
                     rel_probs_llm = torch.nn.functional.softmax(rel_scores_llm/llm_softmax_temperature, dim=0)
                     rel_probs_llm = 1 - rel_probs_llm
@@ -281,10 +292,10 @@ def encode_scene(question, vlm_model: VisionLanguageModel, object_detector: Obje
 
                     del rel_scores_vlm, rel_probs_vlm
                 
-            del rel_logits_per_image
+            del rel_logits_per_image, rel_perplexity
 
     try: 
-        del obj_logits_per_image
+        del obj_logits_per_image, rel_reference_main_perplexity_llm
     except:
         pass
 
