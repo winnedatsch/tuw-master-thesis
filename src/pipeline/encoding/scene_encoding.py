@@ -5,16 +5,6 @@ from pipeline.bounding_box_optimization import get_object_bboxes, get_pair_bboxe
 from pipeline.utils import cleanup_whitespace, sanitize_asp
 import math
 import torch
-import json
-import itertools
-
-
-with open('../data/metadata/gqa_all_attribute.json') as f:
-    all_attributes = json.load(f)
-
-with open('../data/metadata/gqa_all_class.json') as f:
-    all_classes = json.load(f)
-    all_child_classes = [c.replace("_", " ") for c in itertools.chain(*all_classes.values())]
 
 
 def bboxes_to_image_crops(bboxes, image, model, mode="pad"):
@@ -70,7 +60,7 @@ def __should_merge__(box1, box2, overlap_threshold):
 
         return False, None
 
-def merge_detected_objects(objects_a, objects_b):
+def merge_detected_objects(objects_a, objects_b, all_classes):
     objects = [*objects_a]
     for ob in objects_b:
         alread_present = False
@@ -95,7 +85,7 @@ def get_article(name):
     return "an" if any(name.startswith(v) for v in ["a", "e", "i", "o", "u"]) else "a"
 
 
-def detect_objects_question_driven(image, classes, object_detector):
+def detect_objects_question_driven(image, classes, object_detector, all_classes, all_child_classes):
     objects = []
     for clazz in classes["classes"]:
         detected_objects = object_detector.detect_objects(image, [clazz.replace("_", " ")], threshold=0.03, k=5)
@@ -103,21 +93,21 @@ def detect_objects_question_driven(image, classes, object_detector):
 
     for category in classes["categories"]:
         detected_objects = object_detector.detect_objects(image, [c.replace("_", " ") for c in all_classes[category]], threshold=0.03, k=5)
-        objects = merge_detected_objects(objects, detected_objects)
+        objects = merge_detected_objects(objects, detected_objects, all_classes)
 
     if classes["all"]:
         detected_objects = object_detector.detect_objects(image, all_child_classes, threshold=0.03, k=25)
-        objects = merge_detected_objects(objects, detected_objects)
+        objects = merge_detected_objects(objects, detected_objects, all_classes)
     return objects
 
 @torch.no_grad()
-def encode_scene(question, model, object_detector):
+def encode_scene(question, model, object_detector, all_classes, all_child_classes, all_attributes, image_path):
     scene_encoding = ""
     
-    attributes, standalone_values = extract_attributes(question)
+    attributes, standalone_values = extract_attributes(question, all_attributes)
     num_attr_values = sum(len(all_attributes.get(attr, [])) for attr in attributes)
     num_standalone_values = len(standalone_values)
-    classes = extract_classes(question)
+    classes = extract_classes(question, all_classes)
     relations = extract_relations(question)
     num_relations = len(relations)
 
@@ -129,10 +119,10 @@ def encode_scene(question, model, object_detector):
 
     scene_encoding += "\n"
 
-    image = read_image(f"../data/images/{question['imageId']}.jpg", ImageReadMode.RGB)
+    image = read_image(f"{image_path}/{question['imageId']}.jpg", ImageReadMode.RGB)
     image_size = {'w': image.shape[2], 'h': image.shape[1]}
 
-    objects = detect_objects_question_driven(image, classes, object_detector)
+    objects = detect_objects_question_driven(image, classes, object_detector, all_classes, all_child_classes)
     object_items = [(f"o{i}", o) for i, o in enumerate(objects)]
     num_objects = len(objects)
 
