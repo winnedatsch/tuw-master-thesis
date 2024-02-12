@@ -1,13 +1,7 @@
 import json 
 from pipeline.utils import sanitize, sanitize_asp
 
-with open('../data/metadata/gqa_all_attribute.json') as f:
-    all_attributes = json.load(f)
-
-with open('../data/metadata/gqa_all_class.json') as f:
-    all_categories = json.load(f)
-
-def extract_attributes(question):
+def extract_attributes(question, all_attributes):
     attributes = set()
     standalone_values = set()
     for operation in question['semantic']:
@@ -57,7 +51,7 @@ def extract_attributes(question):
            {sanitize(v) for v in standalone_values}
 
 
-def extract_classes(question):
+def extract_classes(question, all_categories):
     classes = {
         "categories": set(),
         "classes": set(),
