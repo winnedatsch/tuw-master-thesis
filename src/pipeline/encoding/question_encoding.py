@@ -52,7 +52,7 @@ def encode_question(question):
             if operation['argument'].startswith('not('):
                 value = sanitize_asp(operation['argument'][4:-1])
                 question_encoding += f"filter_any({i+step_padding}, {dependencies[0]}, {value}).\n"
-                question_encoding += f"negate({i+step_padding+1}, {i+step_padding}, {dependencies[0]}).\n"
+                question_encoding += f"negate({i+step_padding+1}, {dependencies[0]}, {i+step_padding}).\n"
                 step_padding = step_padding + 1
             else:
                 value = sanitize_asp(operation['argument'])
@@ -93,7 +93,7 @@ def encode_question(question):
             if operation['argument'].startswith('not('):
                 value = sanitize_asp(operation['argument'][4:-1])
                 question_encoding += f"filter({i+step_padding}, {dependencies[0]}, {attr}, {value}).\n"
-                question_encoding += f"negate({i+step_padding+1}, {i+step_padding}, {dependencies[0]}).\n"
+                question_encoding += f"negate({i+step_padding+1}, {dependencies[0]}, {i+step_padding}).\n"
                 step_padding = step_padding + 1
             else:
                 value = sanitize_asp(operation['argument'])

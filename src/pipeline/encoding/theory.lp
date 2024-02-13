@@ -16,9 +16,9 @@ state(TO,ID) :- scene(TO), object(ID).
 #defined end/1.
 
 ans(V) :- end(TO), attr_value(TO,V).
-ans(V) :- end(TO), attr(TO,V).
-ans(V) :- end(TO), rel(TO,V).
-ans(V) :- end(TO), bool(TO,V).
+ans(A) :- end(TO), attr(TO,A).
+ans(R) :- end(TO), rel(TO,R).
+ans(B) :- end(TO), bool(TO,B).
 
 % ---------- ans ----------
 % At least one answer must be derivable
@@ -109,28 +109,27 @@ bool(TO,no) :- exist(TO, TI), not bool(TO,yes).
 % all_different
 #defined all_different/3.
 
-bool(TO,no) :- all_different(TO, TI, ATTR), state(TI, ID), state(TI, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE).
+bool(TO,no) :- all_different(TO, TI, ATTR), state(TI, ID), state(TI, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE), ID != ID'.
 bool(TO,yes) :- all_different(TO, TI, ATTR), not bool(TO,no).
 
 % all_same
 #defined all_same/3.
 
-bool(TO,no) :- all_same(TO, TI, ATTR), state(TI, ID), state(TI, ID'), has_attr(ID, ATTR, VALUE), not has_attr(ID', ATTR, VALUE).
+bool(TO,no) :- all_same(TO, TI, ATTR), state(TI, ID), state(TI, ID'), has_attr(ID, ATTR, VALUE), not has_attr(ID', ATTR, VALUE), ID != ID'.
 bool(TO,yes) :- all_same(TO, TI, ATTR), not bool(TO,no).
 
 % two_different
 #defined two_different/4.
 
-bool(TO, yes) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE'), VALUE != VALUE'.
-bool(TO, yes) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, _), not has_attr(ID', ATTR, _).
-bool(TO, yes) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), not has_attr(ID, ATTR, _), has_attr(ID', ATTR, _).
-bool(TO,no) :- two_different(TO, TI0, TI1, ATTR), not bool(TO,yes).
+bool(TO,no) :- two_different(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE).
+bool(TO,yes) :- two_different(TO, TI0, TI1, ATTR), not bool(TO,no).
 
 % two_same
 #defined two_same/4.
 
-bool(TO, yes) :- two_same(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE'), VALUE == VALUE'.
-bool(TO,no) :- two_same(TO, TI0, TI1, ATTR), not bool(TO,yes).
+bool(TO,no) :- two_same(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), has_attr(ID, ATTR, VALUE), not has_attr(ID', ATTR, VALUE).
+bool(TO,no) :- two_same(TO, TI0, TI1, ATTR), state(TI0, ID), state(TI1, ID'), not has_attr(ID, ATTR, VALUE), has_attr(ID', ATTR, VALUE).
+bool(TO,yes) :- two_same(TO, TI0, TI1, ATTR), not bool(TO,no).
 
 % ---------- common ----------
 #defined common/3.
@@ -171,4 +170,4 @@ bool(TO,no) :- or(TO, TI0, TI1), not bool(TO,yes).
 
 % ---------- negate ----------
 #defined negate/3.
-state(TO, ID) :- negate(TO, TI0, TI1), state(TI1, ID), not state(TI0, ID).
+state(TO, ID) :- negate(TO, TI0, TI1), state(TI0, ID), not state(TI1, ID).
