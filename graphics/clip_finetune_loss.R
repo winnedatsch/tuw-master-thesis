@@ -13,7 +13,7 @@ loss <- training_loss %>%
 
 ggplot(loss, aes(x=Step, y=value, color=variable)) +
   geom_line(size=1) +
-  scale_color_manual(values=c("#9B79AA", "#4C0099"))
+  scale_color_manual(values=c("#e700e7", "#4C0087"))
   ylab("Loss") +
   guides(color=guide_legend(title="Dataset")) +
   theme(text = element_text(size = 13))
